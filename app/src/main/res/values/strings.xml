@@ -1,0 +1,12 @@
+<resources>
+    <string name="app_name">JustTap!</string>
+    <string name="title_home">JustTap!</string>
+    <string name="title_start">New Game</string>
+    <string name="title_notifications">Notifications</string>
+    <string name="help_intro">Welcome to JustTap!</string>
+    <string name="help_score">Your current average as well as mistakes are displayed here.</string>
+    <string name="help_mechanic1">These are called warps, tap them quickly!</string>
+    <string name="help_mechanic2">Some warps move, don\'t let them get away!</string>
+    <string name="help_mechanic3">Watch out don\'t touch the black holes</string>
+
+</resources>
