@@ -12,11 +12,11 @@
 
     <android.support.constraint.ConstraintLayout
         android:id="@+id/GAME_Scorepanel"
-        android:layout_width="381dp"
-        android:layout_height="69dp"
+        android:layout_width="0dp"
+        android:layout_height="71dp"
         android:layout_marginLeft="0dp"
         android:layout_marginRight="1dp"
-        android:layout_marginTop="0dp"
+        android:layout_marginTop="-26dp"
         app:layout_constraintHorizontal_bias="1.0"
         app:layout_constraintLeft_toLeftOf="parent"
         app:layout_constraintRight_toRightOf="parent"
@@ -34,15 +34,15 @@
             android:textColor="@android:color/background_dark"
             android:textSize="18sp"
             app:layout_constraintBottom_toTopOf="@+id/GAME_Scorelabel"
-            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintHorizontal_bias="0.09"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toLeftOf="@+id/GAME_Scorelabel"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="1.0" />
+            app:layout_constraintVertical_bias="0.705" />
 
         <TextView
             android:id="@+id/GAME_Scoreview"
-            android:layout_width="66dp"
+            android:layout_width="wrap_content"
             android:layout_height="19dp"
             android:layout_marginBottom="8dp"
             android:layout_marginLeft="0dp"
@@ -51,54 +51,54 @@
             android:text="0"
             android:textColor="@android:color/background_dark"
             app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintHorizontal_bias="0.0"
+            app:layout_constraintHorizontal_bias="0.2"
             app:layout_constraintLeft_toRightOf="@+id/GAME_Scorelabel"
             app:layout_constraintRight_toRightOf="parent"
-            app:layout_constraintTop_toTopOf="@+id/GAME_Scorelabel" />
+            app:layout_constraintTop_toTopOf="@+id/GAME_Scorelabel"
+            app:layout_constraintVertical_bias="0.0" />
 
         <TextView
             android:id="@+id/GAME_Scorelabel"
             android:layout_width="51dp"
             android:layout_height="18dp"
             android:layout_marginBottom="8dp"
-            android:layout_marginLeft="254dp"
+            android:layout_marginLeft="248dp"
             android:layout_marginTop="8dp"
             android:text="@string/label_score"
             android:textColor="@android:color/background_dark"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintTop_toTopOf="parent"
-            app:layout_constraintVertical_bias="1.0" />
+            app:layout_constraintVertical_bias="0.972" />
 
         <TextView
             android:id="@+id/GAME_Timeview"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:layout_marginLeft="8dp"
-            android:layout_marginRight="59dp"
-            android:layout_marginTop="-8dp"
+            android:layout_marginLeft="186dp"
+            android:layout_marginTop="-5dp"
             android:text="0"
             android:textColor="@android:color/background_dark"
             android:textSize="18sp"
-            app:layout_constraintHorizontal_bias="1.0"
             app:layout_constraintLeft_toLeftOf="parent"
-            app:layout_constraintRight_toLeftOf="@+id/GAME_Scorelabel"
             app:layout_constraintTop_toBottomOf="@+id/GAME_Timelabel" />
 
         <ImageButton
             android:id="@+id/GAME_PauseButton"
-            android:layout_width="48dp"
-            android:layout_height="47dp"
+            android:layout_width="50dp"
+            android:layout_height="48dp"
             android:layout_marginBottom="8dp"
-            android:layout_marginLeft="8dp"
+            android:layout_marginLeft="16dp"
             android:layout_marginRight="8dp"
             android:layout_marginTop="8dp"
+            android:background="@android:color/transparent"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintHorizontal_bias="0.0"
             app:layout_constraintLeft_toLeftOf="parent"
             app:layout_constraintRight_toLeftOf="@+id/GAME_Timelabel"
             app:layout_constraintTop_toTopOf="parent"
-            app:srcCompat="@android:drawable/ic_media_pause" />
+            app:layout_constraintVertical_bias="0.428"
+            app:srcCompat="@mipmap/button_pause" />
     </android.support.constraint.ConstraintLayout>
 
     <ImageView
@@ -150,12 +150,20 @@
         android:layout_marginTop="4dp"
         android:background="@android:color/background_light"
         app:layout_constraintBottom_toBottomOf="parent"
+        app:layout_constraintHorizontal_bias="0.571"
         app:layout_constraintLeft_toRightOf="@+id/imageView2"
         app:layout_constraintRight_toLeftOf="@+id/imageView3"
         app:layout_constraintTop_toBottomOf="@+id/GAME_Scorepanel"
-        app:layout_constraintVertical_bias="0.0">
+        app:layout_constraintVertical_bias="1.0">
 
 
+        <ViewStub
+            android:id="@+id/GAME_PauseStub"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:layout_centerHorizontal="true"
+            android:layout_centerVertical="true"
+            android:layout="@layout/layout_pause_menu" />
     </RelativeLayout>
 
 </android.support.constraint.ConstraintLayout>

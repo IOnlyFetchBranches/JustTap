@@ -10,5 +10,15 @@
     <string name="help_mechanic3">Watch out don\'t touch the black holes</string>
     <string name="label_score">SCORE:</string>
     <string name="label_time">TIME LEFT:</string>
+    <string name="label_score_getready">Warmup!</string>
+    <string name="label_score_excellent">EXCELLENT</string>
+    <string name="label_score_great">GREAT!</string>
+    <string name="label_score_good">GOOD!</string>
+    <string name="label_score_okay">OKAY!</string>
+    <string name="label_RESUME">Resume Game</string>
+    <string name="bonustimegreat">BONUS TIME!</string>
+    <string name="label_minustime">MINUS TIME</string>
+    <string name="label_RESTARTGAME">Start Over</string>
+    <string name="PAUSE_ExitButton">Leave Game</string>
 
 </resources>

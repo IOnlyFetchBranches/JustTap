@@ -1,10 +1,27 @@
 package com.justtap.comp;
 
 
+import android.annotation.SuppressLint;
+import android.app.Activity;
 import android.content.Context;
+import android.graphics.Color;
+import android.graphics.Rect;
 import android.support.annotation.NonNull;
 import android.util.Log;
+import android.view.MotionEvent;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.animation.AccelerateDecelerateInterpolator;
+import android.view.animation.AlphaAnimation;
+import android.view.animation.Animation;
+import android.view.animation.DecelerateInterpolator;
+import android.widget.RelativeLayout;
+import android.widget.TextView;
 
+import com.justtap.R;
+
+import java.io.InvalidObjectException;
+import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
@@ -14,6 +31,15 @@ import java.util.logging.Level;
 
 import static android.graphics.Color.BLACK;
 import static android.graphics.Color.BLUE;
+import static com.justtap.comp.LogicEngine.Mode.AFTERTIME;
+import static com.justtap.comp.LogicEngine.Mode.BUSY;
+import static com.justtap.comp.LogicEngine.Mode.DONE;
+import static com.justtap.comp.LogicEngine.Mode.GAME;
+import static com.justtap.comp.LogicEngine.Mode.GAMEOVER;
+import static com.justtap.comp.LogicEngine.Mode.IDLE;
+import static com.justtap.comp.LogicEngine.Mode.PAUSED;
+import static com.justtap.comp.LogicEngine.Mode.PAUSING;
+import static com.justtap.comp.LogicEngine.Mode.RESUMING;
 import static com.justtap.utl.Printers.logGlobal;
 import static com.justtap.utl.Printers.logLevel;
 
@@ -37,32 +63,34 @@ public class LogicEngine {
 
 
     //Singleton + core components
-    private  static LogicEngine instance;
-    private static GraphicsHandler graphics;
-    private static SoundHandler player;
+    private static LogicEngine instance; //The singleton
+    private static GraphicsHandler graphics; //The graphics handler
+    private static SoundHandler sound; //The sound handler
 
     //Our Loop components
     private static  ExecutorService corePool = Executors.newFixedThreadPool(3); //3 is a good number.
     private static Timer fpsTimer;
+    private static Mode state = Mode.IDLE; //This is the current states of the Logic engine, and therefore the game.
     //Variables
     private static long frames = 0; //fps
     private static long cycles=0; //How many seconds has the program been running
     //Is the game paused?
     private static boolean isPaused = false;
     //Game settings (Game constants are capitalized for better distinction
+    //Will eventually control how quickly you advance through levels
     private static String DIFF_LEVEL = "EASY"; //All diff level {EASY,MEDIUM,HARD}
+    //NOT DIFF LEVEL!
+    private static String level; // The current level
     //Define the Global game colors;
     private static int[] colorScheme = {BLACK, BLUE}; //{TEXT_COLOR,WARP_COLOR)
     //The amount of time in seconds that the player has left
     private static long roundTime = 30;
     //The current Time
-    private static long time;
+    private static Long time;
     //Hold the timer to prevent race conditions when directly modifying the time
     private static boolean timeModding = false;
     //The amount of warps popped
     private static long popCount = 0; //If surpasses set numbers, difficulty will change
-
-    //END GLOBALS
     //Average pop time of the user, will also fluctuate difficulty
     private static double avgPopTime = 0.0;
     //total time user has been popping warps
@@ -71,31 +99,55 @@ public class LogicEngine {
     private static double minPopTime = 99999.0;
     //Slowest pop time
     private static double maxPopTime = 0;
-    //Of course the score
+    //Of course the score, keep this static
     private static long score = 0;
+    /**
+     * @param time
+     * @param type
+     */
+
+    private static double oldAvgPopTime = 0;
 
     static {
         fpsTimer = new Timer(true);
     }
 
+    private Timer gameTimer = new Timer(true);
+    //Tracking for future use, for graphics likely
+    private long userTouchCount = 0;
+    private float userTouchX = 0f;
+    private float userTouchY = 0f;
+    //Control
     private boolean halt = false; //This serves as an interrupt.
-    private Mode state = Mode.IDLE; //This is the current states of the Logic engine, and therefore the game.
+    private boolean isGameOver = false; //Is the game ended
+    //End Control
+    /**
+     * Break LogicEngine Global Parameter debug Mode before final prod release
+     * This is to prevent memory tampering by some clever reverse engineering; At least make it a bti harder?!
+     */
+    private boolean debugMode = true; //Triggers special debug state.
+    private boolean finishedReset = true;
 
+    /**
+     * @param callingActivityContext
+     */
     //Our Base constructor, initiates the game loop, called with the activity screen's context (Don't worry it's trashed when the loop is done!)
-    private LogicEngine(final Context callingActivityContext) {
+    private LogicEngine(final Context callingActivityContext, final Mode mode) {
         //Link Graphics
         linkGraphics(GraphicsHandler.getInstance(this));
 
-        //Start game loop
-        newContextGameLoop(callingActivityContext);
+        if (mode == Mode.GAME) {
+            //Start game loop
+            newContextGameLoop(callingActivityContext);
+        }
 
 
     }
 
     //ONLY way we work with the Logic Core
-    public static LogicEngine getInstance(Context context) {
+    public static LogicEngine getInstance(Context context, Mode mode) {
         if (instance == null) {
-            instance = new LogicEngine(context);
+            instance = new LogicEngine(context, mode);
 
             return instance;
         } else {
@@ -105,14 +157,23 @@ public class LogicEngine {
 
     //Calculates score and requests score update
     //Reminder that current Types are NORM,BLKHOLE,WRMHOLE
-    static void CalculateScore(long time, String type) {
+    @SuppressWarnings("UnnecessaryLocalVariable")
+    @SuppressLint("SetTextI18n")
+    static void CalculateScore(long time, String type, RelativeLayout.LayoutParams popLocation, Context context) {
         /*This method will calculate the score based on how quickly the time is (in ms)
          * It Must also be able to track the average and adjust its sensitivity based updon the
          * current difficulty level
          *
-         * For now it simply only needs to announce that a warp was popped
          *
         */
+
+        //If first move, start game
+        if (popCount == 0) {
+            state = Mode.GAME;
+            Log.i("Logic Engine=>", " User tapped a warp!");
+            unpauseTimer();
+
+        }
 
         //Update pops
         popCount++;
@@ -120,11 +181,57 @@ public class LogicEngine {
         //Update the total pop time
         totalPopTime += time;
         //Update average pop time
+        oldAvgPopTime = avgPopTime;
         avgPopTime = totalPopTime / popCount;
 
-        //Calculate maxima
+        //Calculate maxima (Can be used as padding)
+        //The faster your fastest the harder the game can be
         if (time < minPopTime) minPopTime = time;
         if (time > maxPopTime) maxPopTime = time;
+
+
+        //Keep the bias in-between .01 and .02 percent, the higher that is the more likely the player is to be within average!
+        boolean AROUND_AVERAGE = avgPopTime > (oldAvgPopTime - (oldAvgPopTime * .01)) && avgPopTime < (oldAvgPopTime + (oldAvgPopTime * .01));
+
+        //Adjustment
+        if (AROUND_AVERAGE) {
+            //you can lower avg to speed up game to make it
+            //super hard
+            Log.i("LOGIC =>", "User is doing average");
+        } else {
+            Log.i("LOGIC =>", "User is above/below average");
+        }
+
+
+        //Label That pops up for user, saying how good they did
+        final TextView qualityLabel = new TextView(context);
+
+
+        //Label Animation
+        AlphaAnimation fadeInDissolve = new AlphaAnimation(0, 1);
+        fadeInDissolve.setDuration(400);
+
+        //Tweak the animation here by fading it out onEnd() and translating it onStart()
+        fadeInDissolve.setAnimationListener(new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+                qualityLabel.animate().translationXBy(40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                qualityLabel.animate().translationYBy(-40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+            }
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                qualityLabel.animate().alpha(0f).setDuration(400).setInterpolator(new DecelerateInterpolator()).start();
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+
+            }
+        });
+
+        //We must reference our gamescreen here;
+        RelativeLayout gameScreen = (RelativeLayout) ((Activity) context).findViewById(R.id.GAME__Area);
 
 
 
@@ -135,39 +242,377 @@ public class LogicEngine {
          *
          * For now until i can determine the fastest and slowest each one with give ten points
          */
+        //Define Ranges
+        boolean INTRO_LEVEL = popCount <= 5; //User is warming up
+        boolean BEGINNER_LEVEL = popCount > 5 && popCount <= 20; //Early Stages
+        boolean INTERMEDIATE_LEVEL = popCount > 20 && popCount <= 45; //Next range, 100 may be a little too high
+        boolean ADVANCED_LEVEL = popCount > 45 && popCount <= 100; // This is where you start getting time for excellents
+        boolean MASTER_LEVEL = popCount > 100 && popCount <= 200; // User is a master, this is quite a feat!
 
-        if (popCount <= 10) {
-            //Of course we would also take into consideration time
-            //Again that comes later for now get a working concept
-            //Remove this when maxes are collected;
-            score += 10;
-        } else if (popCount > 10 && popCount <= 30) {
-            score += 10;
-        } else if (popCount > 30 && popCount <= 50) {
-            score += 10;
-        } else {
-            score += 10;
+        //Define conditions, Percentages in relation to avgpoptime that define what you have to beat.
+        boolean EXCEL_CONDITION = time <= avgPopTime - (avgPopTime * .20); //player is 20% better than average
+        boolean GREAT_CONDITION = time <= avgPopTime - (avgPopTime * .10); //player is 10% better than average
+        boolean GOOD_CONDITION = time <= avgPopTime + (avgPopTime * .10); //player is within 10% of average time
+
+
+        //Initial Stage Level
+        level = "NEW GAME";
+
+        //BEGIN SCORING LOGIC HERE
+        //The labels are also styled here, if that's what you;re looking for!
+        if (!type.equals("BLKHOLE")) {
+            if (INTRO_LEVEL) {
+                if (!level.equals("INTRO")) {
+                    level = "INTRO";
+                    //graphics.order("Logic-UpdateLevel");
+                }
+                //Of course we would also take into consideration time
+                //Label
+                qualityLabel.setText(context.getResources().getString(R.string.label_score_getready) + " +" + 5);
+                qualityLabel.setTextColor(Color.BLACK);
+
+                popLocation.topMargin = popLocation.topMargin + 100;
+                popLocation.leftMargin = popLocation.leftMargin + 50;
+                popLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                popLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                gameScreen.addView(qualityLabel, popLocation);
+                qualityLabel.startAnimation(fadeInDissolve);
+
+                score += 10;
+            } else if (BEGINNER_LEVEL) {
+                if (!level.equals("BEGINNER")) {
+                    level = "BEGINNER";
+                    graphics.order("Logic-UpdateLevel");
+                }
+
+                if (EXCEL_CONDITION) {
+                    score += 10;
+                    //Also add time ?
+
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 10);
+                    qualityLabel.setTextColor(Color.GREEN);
+
+                    popLocation.topMargin = popLocation.topMargin + 100;
+                    popLocation.leftMargin = popLocation.leftMargin + 50;
+                    popLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    popLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, popLocation);
+                    qualityLabel.startAnimation(fadeInDissolve);
+
+
+                } else if (GREAT_CONDITION) {
+                    score += 10;
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 10);
+                    qualityLabel.setTextColor(Color.BLUE);
+
+                    popLocation.topMargin = popLocation.topMargin + 100;
+                    popLocation.leftMargin = popLocation.leftMargin + 50;
+                    popLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    popLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+
+                    gameScreen.addView(qualityLabel, popLocation);
+                    qualityLabel.startAnimation(fadeInDissolve);
+
+                } else if (GOOD_CONDITION) {
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 7);
+                    qualityLabel.setTextColor(Color.BLACK);
+
+                    popLocation.topMargin = popLocation.topMargin + 100;
+                    popLocation.leftMargin = popLocation.leftMargin + 50;
+                    popLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    popLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+
+                    gameScreen.addView(qualityLabel, popLocation);
+                    qualityLabel.startAnimation(fadeInDissolve);
+                    score += 7;
+                } else {
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_okay) + " +" + 5);
+                    qualityLabel.setTextColor(Color.RED);
+
+                    popLocation.topMargin = popLocation.topMargin + 100;
+                    popLocation.leftMargin = popLocation.leftMargin + 50;
+                    popLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    popLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, popLocation);
+                    qualityLabel.startAnimation(fadeInDissolve);
+                    score += 5;
+                }
+
+
+            } else if (INTERMEDIATE_LEVEL) {
+
+                if (!level.equals("INTERMEDIATE")) {
+                    level = "INTERMEDIATE";
+                    graphics.order("Logic-UpdateLevel");
+                }
+
+                if (EXCEL_CONDITION) {
+                    score += 15;
+                    //Also add time ?
+
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 15);
+                    qualityLabel.setTextColor(Color.GREEN);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+
+
+                } else if (GREAT_CONDITION) {
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 12);
+                    qualityLabel.setTextColor(Color.BLUE);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+                    score += 12;
+                } else if (GOOD_CONDITION) {
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 10);
+                    qualityLabel.setTextColor(Color.BLACK);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+                    score += 10;
+
+                } else {
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_okay) + " +" + 5);
+                    qualityLabel.setTextColor(Color.RED);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+                    score += 5;
+                }
+            } else if (ADVANCED_LEVEL) {
+
+                if (!level.equals("ADVANCED")) {
+                    level = "ADVANCED";
+                    graphics.order("Logic-UpdateLevel");
+                }
+
+                if (EXCEL_CONDITION) {
+
+                    int num;
+                    //We only want this to happen around half the time
+                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+                        //add time
+                        setTime(getTime() + 3, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 20 + "p");
+                    } else {
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 20);
+                    }
+
+                    //Label
+                    qualityLabel.setTextColor(Color.GREEN);
+
+                    popLocation.topMargin = popLocation.topMargin + 100;
+                    popLocation.leftMargin = popLocation.leftMargin + 50;
+                    popLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    popLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, popLocation);
+                    qualityLabel.startAnimation(fadeInDissolve);
+
+                    score += 20;
+
+                } else if (GREAT_CONDITION) {
+                    int num;
+                    //We only want this to happen around half the time
+                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+                        //add time
+                        setTime(getTime() + 2, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 15 + "p");
+                    } else {
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 15);
+                    }
+
+                    //Label
+
+                    qualityLabel.setTextColor(Color.BLUE);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+
+                    score += 15;
+                } else if (GOOD_CONDITION) {
+
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 10);
+                    qualityLabel.setTextColor(Color.BLACK);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+                    score += 10;
+                } else {
+
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_okay) + " " + context.getResources().getString(
+                            R.string.label_minustime) + " +" + 7 + "p");
+                    qualityLabel.setTextColor(Color.RED);
+                    setTime(getTime() - 3, false);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+                    score += 7;
+                }
+            } else if (MASTER_LEVEL) {
+                if (!level.equals("MASTER")) {
+                    level = "MASTER";
+                    graphics.order("Logic-UpdateLevel");
+                }
+
+
+                if (EXCEL_CONDITION) {
+
+                    int num;
+                    //We only want this to happen around half the time
+                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+                        //add time
+                        setTime(getTime() + 2, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 30 + "p");
+                    } else {
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 30);
+                    }
+
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 30);
+                    qualityLabel.setTextColor(Color.GREEN);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+
+                    score += 30;
+
+                } else if (GREAT_CONDITION) {
+
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 15);
+                    qualityLabel.setTextColor(Color.BLUE);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+
+                    score += 20;
+                } else if (GOOD_CONDITION) {
+
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 10);
+                    qualityLabel.setTextColor(Color.BLACK);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+                    score += 15;
+                } else {
+
+                    //Label
+                    qualityLabel.setText(context.getResources().getString(R.string.label_minustime) + " +" + 5);
+                    setTime(getTime() - 5, false);
+                    qualityLabel.setTextColor(Color.RED);
+
+                    RelativeLayout.LayoutParams topCorner = popLocation;
+                    topCorner.topMargin = topCorner.topMargin + 100;
+                    topCorner.leftMargin = topCorner.leftMargin + 50;
+
+                    topCorner.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                    topCorner.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                    gameScreen.addView(qualityLabel, topCorner);
+                    qualityLabel.startAnimation(fadeInDissolve);
+                    score += 10;
+                }
+            }
+
+            Log.i("Logic Engine =>", " Current Fastest/Slowest s + average " +
+                    minPopTime + "/" + maxPopTime + " " + avgPopTime);
+
+            //Graphics requests
+            graphics.order("Logic-UpdateScore");
+            graphics.order("Logic-UpdateStats");
         }
-
-        Log.i("Logic Engine =>", " Current Fastest/Slowest Times + average " +
-                minPopTime + "/" + maxPopTime + " " + avgPopTime);
-
-        //Graphics requests
-        graphics.order("Logic-UpdateScore");
-        graphics.order("Logic-UpdateStats");
 
 
         //If a bad type is popped, process the consequences here
         if (type.equals("BLKHOLE")) {
             switch (getDiffLevel()) {
                 case "EASY":
-                    setTime(time - Punishment.EASY.value);
+                    setTime(time - Punishment.EASY.value, false);
                     break;
                 case "MEDIUM":
-                    setTime(time - Punishment.MEDIUM.value);
+                    setTime(time - Punishment.MEDIUM.value, false);
                     break;
                 case "HARD":
-                    setTime(time - Punishment.HARD.value);
+                    setTime(time - Punishment.HARD.value, false);
                     break;
                 default:
                     //Should hopefully never reach here but just incase
@@ -178,20 +623,22 @@ public class LogicEngine {
 
     }
 
-    public static long getTime() {
+    static long getTime() {
         return time;
     }
 
+
     //Time getters/setters
     //Note: we do not HAVE to call order("Logic-UpdateTime") as the timer thread does this automatically)
-    static void setTime(@NonNull long newTime) {
+    private static void setTime(long newTime, boolean freezeTime) {
         pauseTimer(); //Pause timer
         time = newTime; //Update Timer
         graphics.order("Logic-UpdateTime");
         if (time < 0) {
-            time = 0; //We don't want negative time lol
+            time = 0L; //We don't want negative time lol
         }
-        unpauseTimer(); //Un-Pause Timer
+        if (!freezeTime)
+            unpauseTimer(); //Un-Pause Timer
 
     }
 
@@ -209,7 +656,7 @@ public class LogicEngine {
         return score;
     }
 
-    public static String getDiffLevel(){
+    private static String getDiffLevel() {
         return DIFF_LEVEL;
     }
 
@@ -229,21 +676,6 @@ public class LogicEngine {
                 throw new IllegalArgumentException("Choices EASY/MEDIUM/HARD <= SET_DIFF");
 
 
-        }
-    }
-
-    //Check queue
-    public static void serve() {
-        if (!messageQueue.isEmpty()) {
-            while (!messageQueue.isEmpty()) {
-                String message = messageQueue.poll();
-
-                switch (message) {
-
-                    default:
-                        logLevel("Invalid messaage passed to logic-engine -> " + message, Level.WARNING);
-                }
-            }
         }
     }
 
@@ -267,55 +699,167 @@ public class LogicEngine {
     }
 
     //Package private, aux methods used for time coordination with other components
-    static void pauseTimer() {
+    private static void pauseTimer() {
         timeModding = true;
     }
 
-    static void unpauseTimer() {
+    private static void unpauseTimer() {
         timeModding = false;
     }
 
+    static boolean isTimePause() {
+        return timeModding;
+    }
 
-
-
-
-
+    //Return current state;
+    public static Mode State() {
+        return state;
+    }
     //End Game methods
 
-    //IMPORTANT <----GAMELOOP IS HERE---->
-    public void newContextGameLoop(Context context) {
-        final Context callingActivityContext = context;
+    //Internal Methods
 
+    private static void updateState(Mode newState) {
+        //This MAY cause a slight hold on the engine while it readjusts
+        state = newState;
+    }
+
+    //Check queue
+    private void serve(Context context) {
+
+
+        while (!messageQueue.isEmpty()) {
+
+            for (String m : messageQueue) {
+                if (m == null) {
+                    messageQueue.remove(m);
+                }
+            }
+
+            String message = messageQueue.poll();
+            {
+                if (message == null) {
+                    break;
+                }
+            }
+
+
+            switch (message) {
+                case "Game-Reset":
+                    if (state != Mode.BUSY) {
+                        Log.i("Logic Engine =>", " Resetting...");
+                        reset(context);
+                        //noinspection StatementWithEmptyBody
+                        while (state != DONE) {
+                            //do nothing until it finishs
+                        }
+                        for (String m : messageQueue) {
+                            if (m.contains("Reset")) {
+                                messageQueue.remove(m);
+                            }
+                        }
+                        break;
+                    }
+
+                default:
+                    logLevel("Invalid messaage passed to Logic-Engine -> " + message, Level.WARNING);
+            }
+        }
+
+    }
+
+
+    //LOOP SECTION
+
+    //IMPORTANT <----GAMELOOP IS HERE---->
+    private void newContextGameLoop(final Context context) {
+
+
+        //Connect to the game screen
+        final RelativeLayout gameArea = (RelativeLayout) ((Activity) context).findViewById(R.id.GAME__Area);
+
+        if (gameArea == null) {
+            throw new IllegalArgumentException("Game Loop cannot use provided context!");
+        }
+
+
+        gameArea.setOnTouchListener(new View.OnTouchListener() {
+            @Override
+            public boolean onTouch(View v, MotionEvent event) {
+                //Touch logic
+                userTouchCount++;
+                userTouchX = event.getX();
+                userTouchY = event.getY();
+
+                Warp warp = null;
+                //Find the warp
+                for (int x = 0; x < gameArea.getChildCount(); x++) {
+                    if (gameArea.getChildAt(x) instanceof Warp) {
+                        warp = (Warp) gameArea.getChildAt(x);
+                    }
+                }
+                //Safeguard
+                if (warp != null) {
+                    android.graphics.Rect hitBox = new Rect();
+                    warp.getHitRect(hitBox);
+
+                    if (!hitBox.contains((int) userTouchX, (int) userTouchY)) {
+                        Log.i("Logic Engine=>", " User tapped outside of warp!");
+                    }
+                }
+
+                return false;
+            }
+        });
 
         //init our loop
         corePool.execute(new Runnable() {
             @Override
-            public void run() {
-
-
-                //Start the fps reset timer
-                fpsTimer.schedule(new TimerTask() {
-                    @Override
                     public void run() {
-                        if (!halt) {
-                            logGlobal("FPS => " + frames + " CYCLE => " + cycles);
 
-                            cycles++;
-                            if (cycles % 10 == 0) {
-                                logGlobal("10-SEC AVG => " + frames / 10);
+                if (frames == 0) {
+                    //Start the fps reset timer
+                    fpsTimer.schedule(new TimerTask() {
+                        @Override
+                        public void run() {
+                            if (!halt) {
+                                logGlobal("FPS => " + frames + " CYCLE => " + cycles);
+
+                                cycles++;
+                                if (cycles % 10 == 0) {
+                                    logGlobal("10-SEC AVG => " + frames / 10);
+                                }
+
+                                frames = 0;
                             }
-
-                            frames = 0;
                         }
-                    }
-                }, 0, 1000);
-                //End fps timer loop (May convert to more modular runnable later
+                    }, 0, 1000);
+                    //End fps timer definition (May convert to more modular runnable later
+                }
 
+
+                //Initial UI Updates (So the user wont see the clock at zero)
+                graphics.order("Logic-UpdateTime");
+
+                startTimer();
+                pauseTimer(); //Pause the timer
+
+
+                //Timer will unpause on first warp touch
 
                 //This is the basis of our Logic Loop
                 while (!halt) {
 
-                    serve(); //Check messages
+                    if (!isPaused) {
+                        serve(context);
+                    }
+
+                    while (isPaused) {
+                        //Serve Only
+                        serve(context); //Check messages
+                        tick();
+                    }
+
 
                     //If the game screen is empty, order a warp()
                     if (GraphicsHandler.isGamespaceEmpty) {
@@ -325,13 +869,26 @@ public class LogicEngine {
 
 
                     //Push graphics engine cycle
-                    graphics.update(callingActivityContext); //Makes calls to the UI thread depending on the current frame state
+                    graphics.update(context); //Makes calls to the UI thread depending on the current frame state
 
                     //End of game loop
                     tick(); //Push frame
 
-                    if (isPaused) {
-                        //Go to pause loop
+                    //Always Update this at the end.
+                    //Initial state
+                    if (state == DONE) {
+                        //Give the rest of the app a room to catch it
+                        try {
+                            Thread.sleep(100);
+                            //resume
+                            switchMode(Mode.RESUMING, context);
+                        } catch (InterruptedException ie) {
+                            Log.e("Logic Engine =>", " Severe Error, Program Will Now Exit " + ie.getLocalizedMessage());
+                            System.exit(1);
+                        }
+                    } else {
+                        state = IDLE;
+
                     }
 
 
@@ -342,37 +899,304 @@ public class LogicEngine {
         });
     }
 
+    //MENU LOOP
+    private void newContextMenuLoop(Context context) {
+        /*
+        This loop will need to handle displaying the menus and handling interaction logic for them
+         */
+    }
+
     //PAUSE LOOP
-    public void pauseLoop(Context context) {
+    @SuppressWarnings("unused")
+    private void pauseLoop(Context context) {
         //Empty for now, But will reveal the opacity and reenable control fo the menu
     }
 
+
+    //Switches modes and returns a reference to the engine
+    public LogicEngine switchMode(Mode mode, Context callingActivityContext) {
+
+        //Cannot switch mode while reset is happening
+        //noinspection StatementWithEmptyBody
+        while (!finishedReset) {
+            //Wait
+        }
+
+
+        switch (mode) {
+            case MENU:
+                //Transition from Game.
+                if (state == Mode.GAME) {
+                    halt = true;
+                    state = Mode.IDLE;
+                }
+                if (state != mode) {
+                    if (halt) {
+                        halt = false;
+                    }
+                    state = mode;
+                    newContextMenuLoop(callingActivityContext);
+                }
+                break;
+            case GAME:
+                //Transition from menu
+                if (state == Mode.MENU) {
+                    halt = true;
+                    state = Mode.IDLE;
+                }
+                if (state != mode) {
+                    state = mode;
+                    newContextGameLoop(callingActivityContext);
+                }
+                break;
+            case PAUSED: //Nothing as it leads to the same outcome
+            case PAUSING:
+                state = PAUSING;
+                //if Engine is not already Paused
+                if (!isPaused) {
+                    //Disable all warps
+                    final RelativeLayout GameArea = (RelativeLayout) ((Activity) callingActivityContext).findViewById(R.id.GAME__Area);
+                    for (int x = 0; x < GameArea.getChildCount(); x++) {
+                        if (GameArea.getChildAt(x) instanceof Warp) {
+                            GameArea.getChildAt(x).setClickable(false);
+                        }
+                    }
+
+
+                    isPaused = true; //Flip the control boolean
+                    pauseTimer(); //Double lock just in case some legacy components still check for timer activity
+                    //Update State
+                    state = PAUSED;
+                }
+                break;
+            case RESUMING:
+                //if Engine is Paused
+                if (isPaused) {
+                    state = RESUMING;
+                    isPaused = false; //Flip the control boolean
+                    unpauseTimer(); //unlock timer fully
+                    //unfreeze warps, if it isn't gameover or if debugmode
+                    if (!isGameOver || debugMode) {
+                        final RelativeLayout gamescreen = (RelativeLayout) ((Activity) callingActivityContext).findViewById(R.id.GAME__Area);
+                        for (int x = 0; x < gamescreen.getChildCount(); x++) {
+                            if (gamescreen.getChildAt(x) instanceof Warp) {
+                                gamescreen.getChildAt(x).setClickable(true);
+                            }
+                        }
+                    }
+
+                    //Update State back to GAME if it can
+                    if (time != 0)
+                        state = GAME;
+                    else {
+                        //end the game prematurely;
+                        if (!isGameOver) {
+                            switchMode(GAMEOVER, callingActivityContext);
+                        }
+                    }
+
+
+                }
+                break;
+            case GAMEOVER:
+                halt = true; //Break the game loop
+                //Show game over splash and disable UI input;
+                pauseTimer();
+                state = mode;
+                graphics.order("Logic-GameOver");
+            default:
+                return this;
+
+        }
+        return this;
+    }
+
+    //Reset orders NEED effective mode management, read the comment
+    private void reset(final Context context) {
+        //First set the state as BUSY and Halt
+        state = Mode.BUSY;
+        //Flip the halt switch
+        halt = true;
+        try {
+            //Wait a bit for everything to end
+            Thread.sleep(100);
+        } catch (InterruptedException ie) {
+            state = Mode.ERROR;
+            Log.e("Logic Engine =>", "Critical Error, Program Will Now Exit!  \n" + ie.getLocalizedMessage());
+        }
+
+        corePool.execute(new Runnable() {
+            @Override
+            public void run() {
+                //Alert the Graphics
+
+                graphics.order("Logic-Reset"); //THIS BLOCKS AND WILL NOT UPDATE UI UNTIL LOGIC HAS FINISHED, ELSE WE GET CONTINUITY ISSUES!!!!!!
+                //There are no looper threads running currently, so we need to manually call update()
+
+                graphics.update(context);
+                //Will not proceed until engine has left busy state!;
+
+            }
+        });
+
+        //noinspection StatementWithEmptyBody
+        while (GraphicsHandler.State() != Mode.BUSY) {
+            //Set state as IDLE
+            state = IDLE;
+            //Wait for handler to process
+            if (GraphicsHandler.State() == Mode.BUSY) {
+                break;
+            }
+        }
+
+        state = BUSY;
+
+        //Reset all vars
+        popCount = 0;
+        avgPopTime = 0;
+        oldAvgPopTime = 0;
+        userTouchCount = 0;
+        userTouchX = 0;
+        userTouchY = 0;
+        maxPopTime = 0.0;
+        minPopTime = 99999.0;
+        level = "INTRO";
+        score = 0;
+
+        gameTimer.cancel();
+
+
+        //Dont forget thhis program will break
+        state = Mode.IDLE; //Lets graphics handler proceed
+
+        //Wait for it to finish
+        //noinspection StatementWithEmptyBody
+        while (GraphicsHandler.State() == Mode.BUSY) {
+            //Leave the busy state;
+        }
+
+        try {
+            Thread.sleep(50);
+        } catch (InterruptedException ie) {
+            state = Mode.ERROR;
+            Log.e("Logic Engine =>", "Critical Error, Program Will Now Exit!  \n" + ie.getLocalizedMessage());
+        }
+
+
+        //unflip the halt switch
+        halt = false;
+
+        try {
+            Thread.sleep(100);
+        } catch (InterruptedException ie) {
+            state = Mode.ERROR;
+            Log.e("Logic Engine =>", "Critical Error, Program Will Now Exit!  \n" + ie.getLocalizedMessage());
+        }
+
+        //WAIT FOR HANDLER TO BE DONE
+        //noinspection StatementWithEmptyBody
+        while (GraphicsHandler.State() != DONE) {
+            state = IDLE;
+            //Do nothing but wait!
+        }
+        state = Mode.DONE;
+
+        Log.i("Logic Engine =>", " Done with reset!");
+        //start new game
+        newContextGameLoop(context);
+
+
+    }
+
+    //End loops
     //Start the game timer;
     private void startTimer() {
+        gameTimer = new Timer(true);
         time = roundTime;
 
-        Timer gameTimer = new Timer(true);
+
         gameTimer.schedule(new TimerTask() {
             @Override
             public void run() {
-                while (isPaused || timeModding) {
-                    //Halt while paused
+
+
+                //Update the timer, believe it or not in the extreme you can catch the timer mid cycle
+                //Thats why it checks conditions again.
+                //noinspection ConstantConditions
+                if (!timeModding && state != PAUSED) {
+                    //This is to fix continuity issues
+                    if (popCount > 0) {
+                        //noinspection SynchronizeOnNonFinalField
+                        synchronized (time) {
+                            time = time - 1;
+                            //Update ui
+                            graphics.order("Logic-UpdateTime");
+                        }
+                        Log.i("TIME =>", "New time:" + time);
+                    }
                 }
-                //Update the timer
-                time--;
-                //Update ui
-                graphics.order("Logic-UpdateTime");
-                if (time == 0) {
-                    this.cancel();
-                    //gameover
+
+
+                if (time <= 0) {
+                    boolean saved = false;//Did the user save themself?
+                    time = 0L;
+                    //Update the UI
+                    graphics.order("LOGIC-UpdateTime");
+
+                    //wait a bit for any cahnges
+                    //Fixing desync issues
+                    try {
+                        Thread.sleep(500);
+
+                        if (time <= 0) {
+                            //Update the UI
+                            graphics.order("LOGIC-UpdateTime");
+                            this.cancel();
+                        } else {
+                            //Update the UI
+                            graphics.order("LOGIC-UpdateTime");
+                            saved = true;
+                        }
+
+                    } catch (InterruptedException ie) {
+                        //do nothing
+                    }
+
+                    if (!saved) {
+                        //This is what happens when the timer hits zero
+                        if (!debugMode) {
+                            //End game
+                            //UI End
+                            graphics.order("Logic-GameOver");
+                            //Logic End
+                            isGameOver = true;
+                            state = GAMEOVER;
+                        } else {
+                            //Logic End only
+                            state = AFTERTIME; //After game is a debug only state;
+                        }
+                    }
+                }
+                //Secondary time catch. [Again we disable Empty Body check]
+                //noinspection StatementWithEmptyBody
+                while (timeModding || state == PAUSED) {
+                    //Halt while paused
                 }
             }
         }, 500, 1000);
     }
 
-    //Flow methods, mainly unused
-    public void order(String s) {
 
+    //Logic engine really only listens to Activities, as context is required for many of it's ops
+    public void order(@NonNull String message, @NonNull Context callingActivityContext) throws InvalidObjectException {
+        //Test if valid activity context
+        View test = ((Activity) callingActivityContext).findViewById(R.id.GAME__Area);
+        if (test == null) {
+            throw new InvalidObjectException("Context must be activity level!");
+        } else {
+            messageQueue.add(message);
+        }
+        //That was easy, all the fun stuff happens in serve()
     }
 
     //Push frames
@@ -380,27 +1204,30 @@ public class LogicEngine {
        frames++;
     }
 
-    //Link Graphics engine (Should only be done by Engine. Try to avoid manually calling this
+    //Link Graphics engine (Should only be done by Engine ONCE on startup. Try to avoid manually calling this
     private void linkGraphics(GraphicsHandler handler ){
         if(graphics ==null){
             graphics=handler;
         }
     }
 
-    //Don't need an unpause game, the pause loop will have an out.
-    //Preferably triggered by the resume game button;
-    public void pauseGame(Context callingActivityContext) {
-        isPaused = true;
-        pauseLoop(callingActivityContext);
 
-    }
+    //ENUMS
 
     //Core Control (Mode set, Loop control)
     public enum Mode {
         GAME,
         MENU,
         IDLE,
+        PAUSING,
+        PAUSED,
+        RESUMING,
+        GAMEOVER,
+        AFTERTIME, //This can only be called when app is in debug mode!
+        BUSY, // Mainly called when engine is doing something that should'nt be spammed (LIKE RESET)
+        DONE,
         ERROR
+
 
     }
 
@@ -422,9 +1249,23 @@ public class LogicEngine {
         }
     }
 
+    //Enums that store game difficulties
+    enum Difficulties {
+        EASY(0),
+        MEDIUM(1),
+        HARD(2);
 
+        private int level;
 
+        Difficulties(int i) {
+            level = i;
+        }
 
+        public int ID() {
+            return this.level;
+        }
+
+    }
 }
 
 
