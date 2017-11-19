@@ -8,5 +8,7 @@
     <string name="help_mechanic1">These are called warps, tap them quickly!</string>
     <string name="help_mechanic2">Some warps move, don\'t let them get away!</string>
     <string name="help_mechanic3">Watch out don\'t touch the black holes</string>
+    <string name="label_score">SCORE:</string>
+    <string name="label_time">TIME LEFT:</string>
 
 </resources>

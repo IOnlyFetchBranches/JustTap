@@ -2,58 +2,96 @@ package com.justtap.comp;
 
 
 import android.content.Context;
-import android.media.Image;
-import android.view.MotionEvent;
-import android.view.View;
-import android.widget.ImageView;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.util.Log;
+
+import com.justtap.R;
 
 public class Warp extends android.support.v7.widget.AppCompatImageView{
 
+    //Type selection
+    private static String[] Types = {"NORM", "BLKHOLE", "WRMHOLE"};
+    //Graphics Prefs
+    private static int[] Colors; //{TEXT COLOR, WARP COLOR}
     //Time of creation (Called to see how long it took to hit
     private final long createTime=System.currentTimeMillis();
-
+    private String type;
+    //Ref to parent graphics handler
     private GraphicsHandler parent;
+    private Bitmap image;
+
+    //CONTEXT CANNOT BE MADE STATIC
+    private Context callingActivityContext;
 
 
-    //Controls
-    public Warp(Context context, GraphicsHandler parent){
+    //Primary constructor
+    public Warp(int diffLevel, Context context, GraphicsHandler parent) {
         super(context);
 
         this.parent=parent; //link to the graphics handler
+        setType(diffLevel); //Set Type;
 
-        //Set the ontouch listener
-        setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                LogicEngine.CalculateScore(pop());
-            }
-        });
 
+        //Graphics handling
+        Colors = LogicEngine.getColorScheme(false);
 
 
     }
 
+    //This funtion ensures the size of the item is kept valid
+    @Override
+    protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+        super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+
+        int dwidth = 250;
+        int dheight = 250;
+
+        int widthMode = MeasureSpec.getMode(widthMeasureSpec);
+        int mwidth = MeasureSpec.getSize(widthMeasureSpec);
+        int heightMode = MeasureSpec.getMode(heightMeasureSpec);
+        int mheight = MeasureSpec.getSize(heightMeasureSpec);
+
+        Log.i("WARP => ", "Measured W H" + mwidth + " " + mheight);
+
+
+        int width, height;
+
+        width = dwidth;
+        height = dheight;
+
+        setMeasuredDimension(width, height);
+
+    }
+
+    @Override
+    protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
+        super.onLayout(changed, left, top, right, bottom);
+        Log.e("WARP =>", "Pos L T R B:" + left + " " + top + " " + right + " " + bottom);
+
+    }
+
     //This function is called when the user taps the created drawable, Returns the amount of milliseconds it took them.
-    private long pop(){
-        this.setOnClickListener(new OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                //Do nothing again (Disable)
-            }
-        });
-
-        //disappear *poof*
-        this.setAlpha(0f);
-
-        parent.order("Warp-Pop");
-        while(!GraphicsHandler.isGamespaceEmpty){
-            //wait for pop to occur
-        }
-
-        //gen a new one based on the current difficulty level
-        parent.order("Warp-"+LogicEngine.getDiffLevel());
-
+    long pop() {
         return System.currentTimeMillis() - createTime;
+
+    }
+
+    String getType() {
+        return type;
+    }
+
+    //Type handling
+    Warp setType(int level) {
+        type = Types[(int) (Math.random() * level)];
+        //Determine Drawable used for warp
+        if (type.equals("NORM")) {
+            this.setImageDrawable(getResources().getDrawable(R.mipmap.warp_norm));
+            //Also update internal bitmap for canvas correction
+            image = BitmapFactory.decodeResource(getResources(), R.mipmap.warp_norm);
+        }
+        Log.i("WARP =>", "Set type " + type);
+        return this;
     }
 
 
