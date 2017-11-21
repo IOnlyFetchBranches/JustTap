@@ -1,9 +1,9 @@
 # JustTap 
 this.addView(new TextView(context).setText("
+
   Welcome to JustTap!
 
-    This is just a fun reaction training game I decided to undertake
-  a couple days ago for Android!
+    This is just a fun reaction training game I decided to undertake a couple days ago for Android!
   It isn't really meant to be unique, but it is quite fun to work on :)
 
   To get started, open up Android Studio and pull the master branch.
