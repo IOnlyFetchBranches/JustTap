@@ -14,6 +14,8 @@ this.addView(new TextView(context).setText("
   once I implement all the features. 
 
   Don't worry every feature is compartmentalized such that sprucing it up in the future shouldn't be too much of a pain haha
+  
+  If you want more, read the Update.md
 
 have fun!
 "));
