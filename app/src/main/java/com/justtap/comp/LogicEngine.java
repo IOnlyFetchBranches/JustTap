@@ -80,8 +80,10 @@ public class LogicEngine {
     //Will eventually control how quickly you advance through levels
     //For now its challenging enough for it to dictate punishment for missing and such
     private static Difficulties DIFF_LEVEL = Difficulties.INTER; //All diff level {EASY,INTER,HARD}
-    //NOT DIFF LEVEL!
+    //NOT DIFF LEVEL! This sets the current level of PROGRESSION in a Level
     private static String level; // The current level
+    //If true, the user will get punished for missed taps as well
+    private static boolean perfectMode = true; //True by default for now
     //Define the Global game colors;
     private static int[] colorScheme = {BLACK, BLUE}; //{TEXT_COLOR,WARP_COLOR)
     //The amount of time in seconds that the player has left
@@ -891,72 +893,74 @@ public class LogicEngine {
                     warp.getHitRect(hitBox);
                     //It's a miss then!
                     if (!hitBox.contains((int) userTouchX, (int) userTouchY)) {
-                        //How much are they punished?
-                        int loss =
-                                DIFF_LEVEL == Difficulties.EASY ? Punishment.MISS_EASY.value :
-                                        DIFF_LEVEL == Difficulties.INTER ? Punishment.MISS_INTER.value :
-                                                DIFF_LEVEL == Difficulties.HARD ? Punishment.MISS_HARD.value : 3;
+                        //Are they playing in the right mode?
+                        if (perfectMode) {
+                            //How much are they punished?
+                            int loss =
+                                    DIFF_LEVEL == Difficulties.EASY ? Punishment.MISS_EASY.value :
+                                            DIFF_LEVEL == Difficulties.INTER ? Punishment.MISS_INTER.value :
+                                                    DIFF_LEVEL == Difficulties.HARD ? Punishment.MISS_HARD.value : 3;
 
-                        //Declare Label
-                        final TextView qualityLabel = new TextView(context);
+                            //Declare Label
+                            final TextView qualityLabel = new TextView(context);
 
 
-                        //Fade In animation for Float Text
+                            //Fade In animation for Float Text
 
-                        //Where do we gen the animation?
-                        final RelativeLayout.LayoutParams missLocation = warp.getPosition();
-                        //Label Animation
-                        AlphaAnimation fadeInDissolve = new AlphaAnimation(0, 1);
-                        fadeInDissolve.setDuration(400);
+                            //Where do we gen the animation?
+                            final RelativeLayout.LayoutParams missLocation = warp.getPosition();
+                            //Label Animation
+                            AlphaAnimation fadeInDissolve = new AlphaAnimation(0, 1);
+                            fadeInDissolve.setDuration(400);
 
-                        //Tweak the animation here by fading it out onEnd() and translating it onStart()
-                        fadeInDissolve.setAnimationListener(new Animation.AnimationListener() {
-                            @Override
-                            public void onAnimationStart(Animation animation) {
-                                qualityLabel.animate().translationXBy(40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
-                                qualityLabel.animate().translationYBy(-40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                            //Tweak the animation here by fading it out onEnd() and translating it onStart()
+                            fadeInDissolve.setAnimationListener(new Animation.AnimationListener() {
+                                @Override
+                                public void onAnimationStart(Animation animation) {
+                                    qualityLabel.animate().translationXBy(40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                                    qualityLabel.animate().translationYBy(-40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                                }
+
+                                @Override
+                                public void onAnimationEnd(Animation animation) {
+                                    qualityLabel.animate().alpha(0f).setDuration(400).setInterpolator(new DecelerateInterpolator()).start();
+                                }
+
+                                @Override
+                                public void onAnimationRepeat(Animation animation) {
+
+                                }
+                            });
+
+
+                            //Design Label
+                            qualityLabel.setText(context.getResources().getString(R.string.label_score_miss) + " -" + loss);
+                            qualityLabel.setTextColor(Color.RED);
+
+
+                            missLocation.topMargin = missLocation.topMargin + 100;
+                            missLocation.leftMargin = missLocation.leftMargin + 50;
+                            missLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                            missLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                            gameArea.addView(qualityLabel, missLocation);
+                            qualityLabel.startAnimation(fadeInDissolve);
+
+                            //Subtract time;
+                            setTime(getTime() - loss, false);
+
+
+                            //"Click the warp"
+                            for (int x = 0; x < gameArea.getChildCount(); x++) {
+                                if (gameArea.getChildAt(x) instanceof Warp) {
+                                    //Two critical sections!
+                                    ((Warp) gameArea.getChildAt(x)).markMissed();//Disables scoring
+                                    gameArea.getChildAt(x).callOnClick(); //Call the onclick of the warp
+                                }
                             }
-
-                            @Override
-                            public void onAnimationEnd(Animation animation) {
-                                qualityLabel.animate().alpha(0f).setDuration(400).setInterpolator(new DecelerateInterpolator()).start();
-                            }
-
-                            @Override
-                            public void onAnimationRepeat(Animation animation) {
-
-                            }
-                        });
-
-
-                        //Design Label
-                        qualityLabel.setText(context.getResources().getString(R.string.label_score_miss) + " -" + loss);
-                        qualityLabel.setTextColor(Color.RED);
-
-
-                        missLocation.topMargin = missLocation.topMargin + 100;
-                        missLocation.leftMargin = missLocation.leftMargin + 50;
-                        missLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
-                        missLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
-
-                        gameArea.addView(qualityLabel, missLocation);
-                        qualityLabel.startAnimation(fadeInDissolve);
-
-                        //Subtract time;
-                        setTime(getTime() - loss, false);
-
-
-                        //"Click the warp"
-                        for (int x = 0; x < gameArea.getChildCount(); x++) {
-                            if (gameArea.getChildAt(x) instanceof Warp) {
-                                //Two critical sections!
-                                ((Warp) gameArea.getChildAt(x)).markMissed();//Disables scoring
-                                gameArea.getChildAt(x).callOnClick(); //Call the onclick of the warp
-                            }
+                        } else {
+                            Log.i("Logic Engine=>", " User Missed warp!");
                         }
-
-
-                        Log.i("Logic Engine=>", " User Missed warp!");
                     }
                 }
 
