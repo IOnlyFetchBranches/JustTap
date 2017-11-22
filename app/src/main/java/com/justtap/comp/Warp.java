@@ -4,7 +4,9 @@ package com.justtap.comp;
 import android.content.Context;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.support.annotation.NonNull;
 import android.util.Log;
+import android.widget.RelativeLayout;
 
 import com.justtap.R;
 
@@ -21,6 +23,13 @@ public class Warp extends android.support.v7.widget.AppCompatImageView{
     private GraphicsHandler parent;
     private Bitmap image;
 
+    //Layout params of the final position of the warp
+    //Only populated by graphics handler calls (gen warp)
+    //THIS WILL RETURN NULL BY DEFAULT IF YOU CREATE YOUR OWN WARP;
+    private RelativeLayout.LayoutParams position = null;
+    //was this warp missed?
+    private boolean missed = false; // Maybe default should be True? idk comeback to later!
+
     //CONTEXT CANNOT BE MADE STATIC
     private Context callingActivityContext;
 
@@ -35,6 +44,7 @@ public class Warp extends android.support.v7.widget.AppCompatImageView{
 
         //Graphics handling
         Colors = LogicEngine.getColorScheme(false);
+
 
 
     }
@@ -77,6 +87,14 @@ public class Warp extends android.support.v7.widget.AppCompatImageView{
 
     }
 
+    RelativeLayout.LayoutParams getPosition() {
+        return position;
+    }
+
+    void setPosition(@NonNull RelativeLayout.LayoutParams position) {
+        this.position = position;
+    }
+
     String getType() {
         return type;
     }
@@ -92,6 +110,14 @@ public class Warp extends android.support.v7.widget.AppCompatImageView{
         }
         Log.i("WARP =>", "Set type " + type);
         return this;
+    }
+
+    void markMissed() {
+        missed = true; //Called by logic engine when user has missed ;}
+    }
+
+    boolean isMissed() {
+        return missed;
     }
 
 

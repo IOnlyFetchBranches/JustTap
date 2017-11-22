@@ -78,7 +78,8 @@ public class LogicEngine {
     private static boolean isPaused = false;
     //Game settings (Game constants are capitalized for better distinction
     //Will eventually control how quickly you advance through levels
-    private static String DIFF_LEVEL = "EASY"; //All diff level {EASY,MEDIUM,HARD}
+    //For now its challenging enough for it to dictate punishment for missing and such
+    private static Difficulties DIFF_LEVEL = Difficulties.INTER; //All diff level {EASY,INTER,HARD}
     //NOT DIFF LEVEL!
     private static String level; // The current level
     //Define the Global game colors;
@@ -167,6 +168,7 @@ public class LogicEngine {
          *
         */
 
+
         //If first move, start game
         if (popCount == 0) {
             state = Mode.GAME;
@@ -207,6 +209,7 @@ public class LogicEngine {
         final TextView qualityLabel = new TextView(context);
 
 
+        //Fade In animation for Float Text
         //Label Animation
         AlphaAnimation fadeInDissolve = new AlphaAnimation(0, 1);
         fadeInDissolve.setDuration(400);
@@ -254,13 +257,21 @@ public class LogicEngine {
         boolean GREAT_CONDITION = time <= avgPopTime - (avgPopTime * .10); //player is 10% better than average
         boolean GOOD_CONDITION = time <= avgPopTime + (avgPopTime * .10); //player is within 10% of average time
 
+        //Define Bias to be added as the play consistantly gains time. in Percentages;
+        final double INTER_TIME_BIAS_ADJ_EXCEL = .0015;
+        final double INTER_TIME_BIAS_ADJ_GREAT = .0015;
+        final double ADV_TIME_BIAS_ADJ_EXCEL = .0010;
+        final double ADV_TIME_BIAS_ADJ_GREAT = .0010;
+        final double MAST_TIME_BIAS_ADJ_EXCEL = .0010;
+        final double MAST_TIME_BIAS_ADJ_GREAT = .0005;
+
 
         //Initial Stage Level
         level = "NEW GAME";
 
         //BEGIN SCORING LOGIC HERE
         //The labels are also styled here, if that's what you;re looking for!
-        if (!type.equals("BLKHOLE")) {
+        if (type.equals("NORM")) {
             if (INTRO_LEVEL) {
                 if (!level.equals("INTRO")) {
                     level = "INTRO";
@@ -289,6 +300,15 @@ public class LogicEngine {
                 if (EXCEL_CONDITION) {
                     score += 10;
                     //Also add time ?
+                    int num;
+                    //We only want this to happen around half the time
+                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+                        //add time
+                        setTime(getTime() + 1, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Secs!");
+                    } else {
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 10);
+                    }
 
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 10);
@@ -358,6 +378,18 @@ public class LogicEngine {
                 if (EXCEL_CONDITION) {
                     score += 15;
                     //Also add time ?
+                    int num;
+                    //We only want this to happen around third the time
+                    if ((num = new Random(time).nextInt(100)) % 3 == 0) {
+                        //add time
+                        setTime(getTime() + 2, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
+                        //make it slightly harder
+                        avgPopTime += avgPopTime * INTER_TIME_BIAS_ADJ_EXCEL;
+
+                    } else {
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 15);
+                    }
 
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 15);
@@ -374,6 +406,22 @@ public class LogicEngine {
 
 
                 } else if (GREAT_CONDITION) {
+                    //Also add time ?
+                    int num;
+                    //We only want this to happen around a third the time
+                    if ((num = new Random(time).nextInt(100)) % 3 == 0) {
+                        //add time
+                        setTime(getTime() + 1, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Sec!");
+                        //make it slightly harder
+                        avgPopTime += avgPopTime * INTER_TIME_BIAS_ADJ_GREAT;
+
+                    } else {
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 12);
+                    }
+
+
+
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 12);
                     qualityLabel.setTextColor(Color.BLUE);
@@ -426,12 +474,16 @@ public class LogicEngine {
 
                 if (EXCEL_CONDITION) {
 
+                    //Also add time ?
                     int num;
                     //We only want this to happen around half the time
                     if ((num = new Random(time).nextInt(100)) % 2 == 0) {
                         //add time
-                        setTime(getTime() + 3, false);
-                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 20 + "p");
+                        setTime(getTime() + 2, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
+                        //make it slightly harder
+                        avgPopTime += avgPopTime * ADV_TIME_BIAS_ADJ_EXCEL;
+
                     } else {
                         qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 20);
                     }
@@ -451,11 +503,15 @@ public class LogicEngine {
 
                 } else if (GREAT_CONDITION) {
                     int num;
-                    //We only want this to happen around half the time
-                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+                    //We only want this to happen around a third of the time
+                    if ((num = new Random(time).nextInt(100)) % 3 == 0) {
                         //add time
                         setTime(getTime() + 2, false);
-                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 15 + "p");
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
+
+                        //make it slightly harder
+                        avgPopTime += avgPopTime * ADV_TIME_BIAS_ADJ_GREAT;
+
                     } else {
                         qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 15);
                     }
@@ -491,11 +547,15 @@ public class LogicEngine {
                     score += 10;
                 } else {
 
+                    //Dynamic loss time
+                    int loss = DIFF_LEVEL == Difficulties.EASY ? 3 :
+                            DIFF_LEVEL == Difficulties.INTER ? 4 :
+                                    DIFF_LEVEL == Difficulties.HARD ? 5 : 7;
+
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_score_okay) + " " + context.getResources().getString(
-                            R.string.label_minustime) + " +" + 7 + "p");
+                    qualityLabel.setText(context.getResources().getString(R.string.label_minustime) + " -" + loss + " Secs!");
+                    setTime(getTime() - loss, false);
                     qualityLabel.setTextColor(Color.RED);
-                    setTime(getTime() - 3, false);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -521,10 +581,16 @@ public class LogicEngine {
                     //We only want this to happen around half the time
                     if ((num = new Random(time).nextInt(100)) % 2 == 0) {
                         //add time
-                        setTime(getTime() + 2, false);
-                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 30 + "p");
+                        setTime(getTime() + 4, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 4 + " Secs!");
+                        //make it slightly harder
+                        avgPopTime += avgPopTime * MAST_TIME_BIAS_ADJ_EXCEL;
+
                     } else {
                         qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 30);
+                        //make it slightly harder
+                        avgPopTime += avgPopTime * MAST_TIME_BIAS_ADJ_GREAT;
+
                     }
 
                     //Label
@@ -543,6 +609,22 @@ public class LogicEngine {
                     score += 30;
 
                 } else if (GREAT_CONDITION) {
+
+                    int num;
+                    //We only want this to happen around half the time
+                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+                        //add time
+                        setTime(getTime() + 2, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
+                        //make it slightly harder
+                        avgPopTime += avgPopTime * MAST_TIME_BIAS_ADJ_GREAT;
+
+                    } else {
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 30);
+                        //make it slightly harder
+                        avgPopTime += avgPopTime * MAST_TIME_BIAS_ADJ_GREAT;
+
+                    }
 
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 15);
@@ -575,9 +657,14 @@ public class LogicEngine {
                     score += 15;
                 } else {
 
+                    //Dynamic loss time
+                    int loss = DIFF_LEVEL == Difficulties.EASY ? 5 :
+                            DIFF_LEVEL == Difficulties.INTER ? 6 :
+                                    DIFF_LEVEL == Difficulties.HARD ? 7 : 10;
+
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_minustime) + " +" + 5);
-                    setTime(getTime() - 5, false);
+                    qualityLabel.setText(context.getResources().getString(R.string.label_minustime) + " -" + loss + " Secs!");
+                    setTime(getTime() - loss, false);
                     qualityLabel.setTextColor(Color.RED);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
@@ -605,17 +692,17 @@ public class LogicEngine {
         //If a bad type is popped, process the consequences here
         if (type.equals("BLKHOLE")) {
             switch (getDiffLevel()) {
-                case "EASY":
+                case EASY:
                     setTime(time - Punishment.EASY.value, false);
                     break;
-                case "MEDIUM":
-                    setTime(time - Punishment.MEDIUM.value, false);
+                case INTER:
+                    setTime(time - Punishment.INTER.value, false);
                     break;
-                case "HARD":
+                case HARD:
                     setTime(time - Punishment.HARD.value, false);
                     break;
                 default:
-                    //Should hopefully never reach here but just incase
+                    //Should hopefully never reach here but just in case
                     throw new IllegalArgumentException("Invalid diff level provided!");
             }
         }
@@ -656,7 +743,7 @@ public class LogicEngine {
         return score;
     }
 
-    private static String getDiffLevel() {
+    private static Difficulties getDiffLevel() {
         return DIFF_LEVEL;
     }
 
@@ -664,16 +751,16 @@ public class LogicEngine {
     static void setDiffLevel(String LEVEL){
         switch(LEVEL){
             case "EASY":
-                DIFF_LEVEL="EASY";
+                DIFF_LEVEL = Difficulties.EASY;
                 break;
-            case "MEDIUM":
-                DIFF_LEVEL="MEDIUM";
+            case "INTER":
+                DIFF_LEVEL = Difficulties.INTER;
                 break;
             case "HARD":
-                DIFF_LEVEL="HARD";
+                DIFF_LEVEL = Difficulties.HARD;
                 break;
             default:
-                throw new IllegalArgumentException("Choices EASY/MEDIUM/HARD <= SET_DIFF");
+                throw new IllegalArgumentException("Choices EASY/INTER/HARD <= SET_DIFF");
 
 
         }
@@ -800,11 +887,76 @@ public class LogicEngine {
                 }
                 //Safeguard
                 if (warp != null) {
-                    android.graphics.Rect hitBox = new Rect();
+                    Rect hitBox = new Rect();
                     warp.getHitRect(hitBox);
-
+                    //It's a miss then!
                     if (!hitBox.contains((int) userTouchX, (int) userTouchY)) {
-                        Log.i("Logic Engine=>", " User tapped outside of warp!");
+                        //How much are they punished?
+                        int loss =
+                                DIFF_LEVEL == Difficulties.EASY ? Punishment.MISS_EASY.value :
+                                        DIFF_LEVEL == Difficulties.INTER ? Punishment.MISS_INTER.value :
+                                                DIFF_LEVEL == Difficulties.HARD ? Punishment.MISS_HARD.value : 3;
+
+                        //Declare Label
+                        final TextView qualityLabel = new TextView(context);
+
+
+                        //Fade In animation for Float Text
+
+                        //Where do we gen the animation?
+                        final RelativeLayout.LayoutParams missLocation = warp.getPosition();
+                        //Label Animation
+                        AlphaAnimation fadeInDissolve = new AlphaAnimation(0, 1);
+                        fadeInDissolve.setDuration(400);
+
+                        //Tweak the animation here by fading it out onEnd() and translating it onStart()
+                        fadeInDissolve.setAnimationListener(new Animation.AnimationListener() {
+                            @Override
+                            public void onAnimationStart(Animation animation) {
+                                qualityLabel.animate().translationXBy(40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                                qualityLabel.animate().translationYBy(-40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                            }
+
+                            @Override
+                            public void onAnimationEnd(Animation animation) {
+                                qualityLabel.animate().alpha(0f).setDuration(400).setInterpolator(new DecelerateInterpolator()).start();
+                            }
+
+                            @Override
+                            public void onAnimationRepeat(Animation animation) {
+
+                            }
+                        });
+
+
+                        //Design Label
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_miss) + " -" + loss);
+                        qualityLabel.setTextColor(Color.RED);
+
+
+                        missLocation.topMargin = missLocation.topMargin + 100;
+                        missLocation.leftMargin = missLocation.leftMargin + 50;
+                        missLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                        missLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                        gameArea.addView(qualityLabel, missLocation);
+                        qualityLabel.startAnimation(fadeInDissolve);
+
+                        //Subtract time;
+                        setTime(getTime() - loss, false);
+
+
+                        //"Click the warp"
+                        for (int x = 0; x < gameArea.getChildCount(); x++) {
+                            if (gameArea.getChildAt(x) instanceof Warp) {
+                                //Two critical sections!
+                                ((Warp) gameArea.getChildAt(x)).markMissed();//Disables scoring
+                                gameArea.getChildAt(x).callOnClick(); //Call the onclick of the warp
+                            }
+                        }
+
+
+                        Log.i("Logic Engine=>", " User Missed warp!");
                     }
                 }
 
@@ -1052,14 +1204,16 @@ public class LogicEngine {
         state = BUSY;
 
         //Reset all vars
-        popCount = 0;
-        avgPopTime = 0;
-        oldAvgPopTime = 0;
-        userTouchCount = 0;
+        popCount = 0L;
+        avgPopTime = 0.0;
+        totalPopTime = 0.0;
+        oldAvgPopTime = 0.0;
+        userTouchCount = 0L;
+        time = 0L;
         userTouchX = 0;
         userTouchY = 0;
         maxPopTime = 0.0;
-        minPopTime = 99999.0;
+        minPopTime = 5.0;
         level = "INTRO";
         score = 0;
 
@@ -1235,8 +1389,11 @@ public class LogicEngine {
     // Why Here? Well because It needs to be easy for me to tweak lol
     private enum Punishment {
         EASY(5),
-        MEDIUM(7),
-        HARD(10);
+        INTER(7),
+        HARD(10),
+        MISS_EASY(1),
+        MISS_INTER(2),
+        MISS_HARD(3);
 
         private int value;
 
@@ -1252,7 +1409,7 @@ public class LogicEngine {
     //Enums that store game difficulties
     enum Difficulties {
         EASY(0),
-        MEDIUM(1),
+        INTER(1),
         HARD(2);
 
         private int level;

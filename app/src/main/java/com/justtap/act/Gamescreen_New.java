@@ -92,6 +92,7 @@ public class Gamescreen_New extends AppCompatActivity {
                     }
                 }
             });
+
             exitButton.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {

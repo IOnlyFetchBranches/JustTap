@@ -20,5 +20,6 @@
     <string name="label_minustime">MINUS TIME</string>
     <string name="label_RESTARTGAME">Start Over</string>
     <string name="PAUSE_ExitButton">Leave Game</string>
+    <string name="label_score_miss">Missed!</string>
 
 </resources>

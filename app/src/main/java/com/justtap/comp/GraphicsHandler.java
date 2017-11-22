@@ -25,7 +25,7 @@ import java.util.logging.Level;
 
 import static com.justtap.comp.LogicEngine.Difficulties.EASY;
 import static com.justtap.comp.LogicEngine.Difficulties.HARD;
-import static com.justtap.comp.LogicEngine.Difficulties.MEDIUM;
+import static com.justtap.comp.LogicEngine.Difficulties.INTER;
 import static com.justtap.utl.Numbers.genInt;
 import static com.justtap.utl.Printers.logLevel;
 
@@ -143,13 +143,13 @@ public class GraphicsHandler {
                     break;
                 }
 
-                //EASY Warps are normal, MEDIUM can be Black holes, Hard can be both as well as wormholes
+                //EASY Warps are normal, INTER can be Black holes, Hard can be both as well as wormholes
                 switch (message) {
                     case "Warp-EASY":
                         genWarp(EASY, context);
                         break;
-                    case "Warp-MEDIUM":
-                        genWarp(MEDIUM, context);
+                    case "Warp-INTER":
+                        genWarp(INTER, context);
                         break;
                     case "Warp-HARD":
                         genWarp(HARD, context);
@@ -187,8 +187,8 @@ public class GraphicsHandler {
             //Create the warp at a specified difficulty
             if (difficulty == EASY)
                 warp = new Warp(EASY.ID(), context, this);
-            else if (difficulty == MEDIUM) {
-                warp = new Warp(MEDIUM.ID(), context, this);
+            else if (difficulty == INTER) {
+                warp = new Warp(INTER.ID(), context, this);
             } else {
                 warp = new Warp(HARD.ID(), context, this);
             }
@@ -224,6 +224,8 @@ public class GraphicsHandler {
                 position.rightMargin = genInt(0, gamescreen.getWidth() / 2) - genInt(0, Double.valueOf((gamescreen.getWidth() * .1)).intValue());
                 position.topMargin = genInt(0, gamescreen.getHeight());
 
+                warp.setPosition(position);
+
                 warp.measure(ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
 
                 Log.i("Graphic Handler =>", "Margins " + position.topMargin + " " + position.bottomMargin
@@ -250,7 +252,10 @@ public class GraphicsHandler {
                     warp.animate().alpha(0f).start();
                     //Initiate scoring, initiate warp pop()
                     //This also spawns a new warp via a graphics handler req.
-                    LogicEngine.CalculateScore(warp.pop(), warp.getType(), position, context);
+
+                    //Score, if not just a missed warp.
+                    if (!warp.isMissed())
+                        LogicEngine.CalculateScore(warp.pop(), warp.getType(), position, context);
 
 
                     Log.i("Graphic Handler =>", "Removed Warp!");
