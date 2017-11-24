@@ -21,7 +21,6 @@ import android.widget.TextView;
 import com.justtap.R;
 
 import java.io.InvalidObjectException;
-import java.util.Random;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
@@ -40,6 +39,7 @@ import static com.justtap.comp.LogicEngine.Mode.IDLE;
 import static com.justtap.comp.LogicEngine.Mode.PAUSED;
 import static com.justtap.comp.LogicEngine.Mode.PAUSING;
 import static com.justtap.comp.LogicEngine.Mode.RESUMING;
+import static com.justtap.utl.Numbers.genInt;
 import static com.justtap.utl.Printers.logGlobal;
 import static com.justtap.utl.Printers.logLevel;
 
@@ -259,7 +259,11 @@ public class LogicEngine {
         boolean GREAT_CONDITION = time <= avgPopTime - (avgPopTime * .10); //player is 10% better than average
         boolean GOOD_CONDITION = time <= avgPopTime + (avgPopTime * .10); //player is within 10% of average time
 
-        //Define Bias to be added as the play consistantly gains time. in Percentages;
+
+        //NAME SCHEME -> LEVEL_TIME_ADJUSTMENT_CONDITION;
+        //Define Bias to be added as the player beats their average time. in Percentages;
+        final double BEG_TIME_BIAS_ADJ_EXCEL = .0050;
+        final double BEGR_TIME_BIAS_ADJ_GREAT = .0030;
         final double INTER_TIME_BIAS_ADJ_EXCEL = .0015;
         final double INTER_TIME_BIAS_ADJ_GREAT = .0015;
         final double ADV_TIME_BIAS_ADJ_EXCEL = .0010;
@@ -267,6 +271,9 @@ public class LogicEngine {
         final double MAST_TIME_BIAS_ADJ_EXCEL = .0010;
         final double MAST_TIME_BIAS_ADJ_GREAT = .0005;
 
+
+        //RNG
+        int chance = genInt(0, 100);
 
         //Initial Stage Level
         level = "NEW GAME";
@@ -302,18 +309,18 @@ public class LogicEngine {
                 if (EXCEL_CONDITION) {
                     score += 10;
                     //Also add time ?
-                    int num;
-                    //We only want this to happen around half the time
-                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+
+                    //We only want this to happen 2-4 times randomly
+                    if (chance % genInt(2, 4) == 0) {
                         //add time
                         setTime(getTime() + 1, false);
-                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Secs!");
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Sec!");
+                        avgPopTime -= avgPopTime * BEG_TIME_BIAS_ADJ_EXCEL;
                     } else {
                         qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 10);
                     }
 
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 10);
                     qualityLabel.setTextColor(Color.GREEN);
 
                     popLocation.topMargin = popLocation.topMargin + 100;
@@ -326,9 +333,22 @@ public class LogicEngine {
 
 
                 } else if (GREAT_CONDITION) {
-                    score += 10;
+                    score += 7;
+
+                    //We only want this to happen 2-4 times randomly
+                    if (chance % genInt(2, 4) == 0) {
+                        //add time
+                        setTime(getTime() + 1, false);
+                        qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Sec!");
+                        avgPopTime -= avgPopTime * BEGR_TIME_BIAS_ADJ_GREAT;
+                    } else {
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 7);
+                    }
+
+
+
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 10);
+
                     qualityLabel.setTextColor(Color.BLUE);
 
                     popLocation.topMargin = popLocation.topMargin + 100;
@@ -342,7 +362,7 @@ public class LogicEngine {
 
                 } else if (GOOD_CONDITION) {
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 7);
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 5);
                     qualityLabel.setTextColor(Color.BLACK);
 
                     popLocation.topMargin = popLocation.topMargin + 100;
@@ -353,10 +373,10 @@ public class LogicEngine {
 
                     gameScreen.addView(qualityLabel, popLocation);
                     qualityLabel.startAnimation(fadeInDissolve);
-                    score += 7;
+                    score += 5;
                 } else {
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_score_okay) + " +" + 5);
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_okay) + " +" + 3);
                     qualityLabel.setTextColor(Color.RED);
 
                     popLocation.topMargin = popLocation.topMargin + 100;
@@ -366,7 +386,7 @@ public class LogicEngine {
 
                     gameScreen.addView(qualityLabel, popLocation);
                     qualityLabel.startAnimation(fadeInDissolve);
-                    score += 5;
+                    score += 3;
                 }
 
 
@@ -380,21 +400,20 @@ public class LogicEngine {
                 if (EXCEL_CONDITION) {
                     score += 15;
                     //Also add time ?
-                    int num;
+
                     //We only want this to happen around third the time
-                    if ((num = new Random(time).nextInt(100)) % 3 == 0) {
+                    if (chance % 3 == 0) {
                         //add time
                         setTime(getTime() + 2, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
                         //make it slightly harder
-                        avgPopTime += avgPopTime * INTER_TIME_BIAS_ADJ_EXCEL;
+                        avgPopTime -= avgPopTime * INTER_TIME_BIAS_ADJ_EXCEL;
 
                     } else {
                         qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 15);
                     }
 
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 15);
                     qualityLabel.setTextColor(Color.GREEN);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
@@ -409,23 +428,22 @@ public class LogicEngine {
 
                 } else if (GREAT_CONDITION) {
                     //Also add time ?
-                    int num;
+
                     //We only want this to happen around a third the time
-                    if ((num = new Random(time).nextInt(100)) % 3 == 0) {
+                    if (chance % 3 == 0) {
                         //add time
                         setTime(getTime() + 1, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Sec!");
                         //make it slightly harder
-                        avgPopTime += avgPopTime * INTER_TIME_BIAS_ADJ_GREAT;
+                        avgPopTime -= avgPopTime * INTER_TIME_BIAS_ADJ_GREAT;
 
                     } else {
-                        qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 12);
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 12);
                     }
 
 
 
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 12);
                     qualityLabel.setTextColor(Color.BLUE);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
@@ -477,14 +495,14 @@ public class LogicEngine {
                 if (EXCEL_CONDITION) {
 
                     //Also add time ?
-                    int num;
+
                     //We only want this to happen around half the time
-                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+                    if (chance % 2 == 0) {
                         //add time
                         setTime(getTime() + 2, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
                         //make it slightly harder
-                        avgPopTime += avgPopTime * ADV_TIME_BIAS_ADJ_EXCEL;
+                        avgPopTime -= avgPopTime * ADV_TIME_BIAS_ADJ_EXCEL;
 
                     } else {
                         qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 20);
@@ -504,15 +522,15 @@ public class LogicEngine {
                     score += 20;
 
                 } else if (GREAT_CONDITION) {
-                    int num;
+
                     //We only want this to happen around a third of the time
-                    if ((num = new Random(time).nextInt(100)) % 3 == 0) {
+                    if (chance % 3 == 0) {
                         //add time
                         setTime(getTime() + 2, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
 
                         //make it slightly harder
-                        avgPopTime += avgPopTime * ADV_TIME_BIAS_ADJ_GREAT;
+                        avgPopTime -= avgPopTime * ADV_TIME_BIAS_ADJ_GREAT;
 
                     } else {
                         qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 15);
@@ -579,19 +597,19 @@ public class LogicEngine {
 
                 if (EXCEL_CONDITION) {
 
-                    int num;
+
                     //We only want this to happen around half the time
-                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+                    if (chance % 2 == 0) {
                         //add time
                         setTime(getTime() + 4, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 4 + " Secs!");
                         //make it slightly harder
-                        avgPopTime += avgPopTime * MAST_TIME_BIAS_ADJ_EXCEL;
+                        avgPopTime -= avgPopTime * MAST_TIME_BIAS_ADJ_EXCEL;
 
                     } else {
                         qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 30);
                         //make it slightly harder
-                        avgPopTime += avgPopTime * MAST_TIME_BIAS_ADJ_GREAT;
+                        avgPopTime -= avgPopTime * MAST_TIME_BIAS_ADJ_GREAT;
 
                     }
 
@@ -612,24 +630,23 @@ public class LogicEngine {
 
                 } else if (GREAT_CONDITION) {
 
-                    int num;
                     //We only want this to happen around half the time
-                    if ((num = new Random(time).nextInt(100)) % 2 == 0) {
+                    if (chance % 2 == 0) {
                         //add time
                         setTime(getTime() + 2, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
                         //make it slightly harder
-                        avgPopTime += avgPopTime * MAST_TIME_BIAS_ADJ_GREAT;
+                        avgPopTime -= avgPopTime * MAST_TIME_BIAS_ADJ_GREAT;
 
                     } else {
-                        qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 30);
+                        qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 20);
                         //make it slightly harder
-                        avgPopTime += avgPopTime * MAST_TIME_BIAS_ADJ_GREAT;
+                        avgPopTime -= avgPopTime * MAST_TIME_BIAS_ADJ_GREAT;
 
                     }
 
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_score_great) + " +" + 15);
+
                     qualityLabel.setTextColor(Color.BLUE);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
@@ -645,7 +662,7 @@ public class LogicEngine {
                 } else if (GOOD_CONDITION) {
 
                     //Label
-                    qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 10);
+                    qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 15);
                     qualityLabel.setTextColor(Color.BLACK);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
@@ -876,95 +893,98 @@ public class LogicEngine {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 //Touch logic
-                userTouchCount++;
-                userTouchX = event.getX();
-                userTouchY = event.getY();
+                if (!timeModding) {
+                    userTouchCount++;
+                    userTouchX = event.getX();
+                    userTouchY = event.getY();
 
-                Warp warp = null;
-                //Find the warp
-                for (int x = 0; x < gameArea.getChildCount(); x++) {
-                    if (gameArea.getChildAt(x) instanceof Warp) {
-                        warp = (Warp) gameArea.getChildAt(x);
+                    Warp warp = null;
+                    //Find the warp
+                    for (int x = 0; x < gameArea.getChildCount(); x++) {
+                        if (gameArea.getChildAt(x) instanceof Warp) {
+                            warp = (Warp) gameArea.getChildAt(x);
+                        }
                     }
-                }
-                //Safeguard
-                if (warp != null) {
-                    Rect hitBox = new Rect();
-                    warp.getHitRect(hitBox);
-                    //It's a miss then!
-                    if (!hitBox.contains((int) userTouchX, (int) userTouchY)) {
-                        //Are they playing in the right mode?
-                        if (perfectMode) {
-                            //How much are they punished?
-                            int loss =
-                                    DIFF_LEVEL == Difficulties.EASY ? Punishment.MISS_EASY.value :
-                                            DIFF_LEVEL == Difficulties.INTER ? Punishment.MISS_INTER.value :
-                                                    DIFF_LEVEL == Difficulties.HARD ? Punishment.MISS_HARD.value : 3;
+                    //Safeguard
+                    if (warp != null) {
+                        Rect hitBox = new Rect();
+                        warp.getHitRect(hitBox);
+                        //It's a miss then!
+                        if (!hitBox.contains((int) userTouchX, (int) userTouchY)) {
+                            //Are they playing in the right mode?
+                            if (perfectMode) {
+                                //How much are they punished?
+                                int loss =
+                                        DIFF_LEVEL == Difficulties.EASY ? Punishment.MISS_EASY.value :
+                                                DIFF_LEVEL == Difficulties.INTER ? Punishment.MISS_INTER.value :
+                                                        DIFF_LEVEL == Difficulties.HARD ? Punishment.MISS_HARD.value : 3;
 
-                            //Declare Label
-                            final TextView qualityLabel = new TextView(context);
+                                //Declare Label
+                                final TextView qualityLabel = new TextView(context);
 
 
-                            //Fade In animation for Float Text
+                                //Fade In animation for Float Text
 
-                            //Where do we gen the animation?
-                            final RelativeLayout.LayoutParams missLocation = warp.getPosition();
-                            //Label Animation
-                            AlphaAnimation fadeInDissolve = new AlphaAnimation(0, 1);
-                            fadeInDissolve.setDuration(400);
+                                //Where do we gen the animation?
+                                final RelativeLayout.LayoutParams missLocation = warp.getPosition();
+                                //Label Animation
+                                AlphaAnimation fadeInDissolve = new AlphaAnimation(0, 1);
+                                fadeInDissolve.setDuration(400);
 
-                            //Tweak the animation here by fading it out onEnd() and translating it onStart()
-                            fadeInDissolve.setAnimationListener(new Animation.AnimationListener() {
-                                @Override
-                                public void onAnimationStart(Animation animation) {
-                                    qualityLabel.animate().translationXBy(40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
-                                    qualityLabel.animate().translationYBy(-40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                                //Tweak the animation here by fading it out onEnd() and translating it onStart()
+                                fadeInDissolve.setAnimationListener(new Animation.AnimationListener() {
+                                    @Override
+                                    public void onAnimationStart(Animation animation) {
+                                        qualityLabel.animate().translationXBy(40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                                        qualityLabel.animate().translationYBy(-40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                                    }
+
+                                    @Override
+                                    public void onAnimationEnd(Animation animation) {
+                                        qualityLabel.animate().alpha(0f).setDuration(400).setInterpolator(new DecelerateInterpolator()).start();
+                                    }
+
+                                    @Override
+                                    public void onAnimationRepeat(Animation animation) {
+
+                                    }
+                                });
+
+
+                                //Design Label
+                                qualityLabel.setText(context.getResources().getString(R.string.label_score_miss) + " -" + loss);
+                                qualityLabel.setTextColor(Color.RED);
+
+
+                                missLocation.topMargin = missLocation.topMargin + 100;
+                                missLocation.leftMargin = missLocation.leftMargin + 50;
+                                missLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                                missLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                                gameArea.addView(qualityLabel, missLocation);
+                                qualityLabel.startAnimation(fadeInDissolve);
+
+                                //Subtract time;
+                                setTime(getTime() - loss, false);
+
+
+                                //"Click the warp"
+                                for (int x = 0; x < gameArea.getChildCount(); x++) {
+                                    if (gameArea.getChildAt(x) instanceof Warp) {
+                                        //Two critical sections!
+                                        ((Warp) gameArea.getChildAt(x)).markMissed();//Disables scoring
+                                        gameArea.getChildAt(x).callOnClick(); //Call the onclick of the warp
+                                    }
                                 }
-
-                                @Override
-                                public void onAnimationEnd(Animation animation) {
-                                    qualityLabel.animate().alpha(0f).setDuration(400).setInterpolator(new DecelerateInterpolator()).start();
-                                }
-
-                                @Override
-                                public void onAnimationRepeat(Animation animation) {
-
-                                }
-                            });
-
-
-                            //Design Label
-                            qualityLabel.setText(context.getResources().getString(R.string.label_score_miss) + " -" + loss);
-                            qualityLabel.setTextColor(Color.RED);
-
-
-                            missLocation.topMargin = missLocation.topMargin + 100;
-                            missLocation.leftMargin = missLocation.leftMargin + 50;
-                            missLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
-                            missLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
-
-                            gameArea.addView(qualityLabel, missLocation);
-                            qualityLabel.startAnimation(fadeInDissolve);
-
-                            //Subtract time;
-                            setTime(getTime() - loss, false);
-
-
-                            //"Click the warp"
-                            for (int x = 0; x < gameArea.getChildCount(); x++) {
-                                if (gameArea.getChildAt(x) instanceof Warp) {
-                                    //Two critical sections!
-                                    ((Warp) gameArea.getChildAt(x)).markMissed();//Disables scoring
-                                    gameArea.getChildAt(x).callOnClick(); //Call the onclick of the warp
-                                }
+                            } else {
+                                Log.i("Logic Engine=>", " User Missed warp!");
                             }
-                        } else {
-                            Log.i("Logic Engine=>", " User Missed warp!");
                         }
                     }
                 }
 
                 return false;
+
             }
         });
 
@@ -1283,15 +1303,15 @@ public class LogicEngine {
                 //noinspection ConstantConditions
                 if (!timeModding && state != PAUSED) {
                     //This is to fix continuity issues
-                    if (popCount > 0) {
-                        //noinspection SynchronizeOnNonFinalField
+
+                    //noinspection SynchronizeOnNonFinalField
                         synchronized (time) {
                             time = time - 1;
                             //Update ui
                             graphics.order("Logic-UpdateTime");
                         }
                         Log.i("TIME =>", "New time:" + time);
-                    }
+
                 }
 
 
