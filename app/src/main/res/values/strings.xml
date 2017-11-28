@@ -21,5 +21,6 @@
     <string name="label_RESTARTGAME">Start Over</string>
     <string name="PAUSE_ExitButton">Leave Game</string>
     <string name="label_score_miss">Missed!</string>
+    <string name="label_blackhole_good">GREAT JOB!</string>
 
 </resources>

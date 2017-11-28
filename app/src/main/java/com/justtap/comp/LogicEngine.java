@@ -26,10 +26,14 @@ import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.logging.Level;
 
 import static android.graphics.Color.BLACK;
 import static android.graphics.Color.BLUE;
+import static com.justtap.comp.LogicEngine.Level.ADVANCED;
+import static com.justtap.comp.LogicEngine.Level.BEGINNER;
+import static com.justtap.comp.LogicEngine.Level.INTERMEDIATE;
+import static com.justtap.comp.LogicEngine.Level.INTRO;
+import static com.justtap.comp.LogicEngine.Level.MASTER;
 import static com.justtap.comp.LogicEngine.Mode.AFTERTIME;
 import static com.justtap.comp.LogicEngine.Mode.BUSY;
 import static com.justtap.comp.LogicEngine.Mode.DONE;
@@ -39,6 +43,8 @@ import static com.justtap.comp.LogicEngine.Mode.IDLE;
 import static com.justtap.comp.LogicEngine.Mode.PAUSED;
 import static com.justtap.comp.LogicEngine.Mode.PAUSING;
 import static com.justtap.comp.LogicEngine.Mode.RESUMING;
+import static com.justtap.comp.LogicEngine.Type.BLACKHOLE;
+import static com.justtap.comp.LogicEngine.Type.NORMAL;
 import static com.justtap.utl.Numbers.genInt;
 import static com.justtap.utl.Printers.logGlobal;
 import static com.justtap.utl.Printers.logLevel;
@@ -81,7 +87,7 @@ public class LogicEngine {
     //For now its challenging enough for it to dictate punishment for missing and such
     private static Difficulties DIFF_LEVEL = Difficulties.INTER; //All diff level {EASY,INTER,HARD}
     //NOT DIFF LEVEL! This sets the current level of PROGRESSION in a Level
-    private static String level; // The current level
+    private static Level level; // The current level
     //If true, the user will get punished for missed taps as well
     private static boolean perfectMode = true; //True by default for now
     //Define the Global game colors;
@@ -162,8 +168,8 @@ public class LogicEngine {
     //Reminder that current Types are NORM,BLKHOLE,WRMHOLE
     @SuppressWarnings("UnnecessaryLocalVariable")
     @SuppressLint("SetTextI18n")
-    static void CalculateScore(long time, String type, RelativeLayout.LayoutParams popLocation, Context context) {
-        /*This method will calculate the score based on how quickly the time is (in ms)
+    static void CalculateScore(long popTime, Warp warp, RelativeLayout.LayoutParams popLocation, Context context) {
+        /*This method will calculate the score based on how quickly the popTime is (in ms)
          * It Must also be able to track the average and adjust its sensitivity based updon the
          * current difficulty level
          *
@@ -182,16 +188,16 @@ public class LogicEngine {
         //Update pops
         popCount++;
 
-        //Update the total pop time
-        totalPopTime += time;
-        //Update average pop time
+        //Update the total pop popTime
+        totalPopTime += popTime;
+        //Update average pop popTime
         oldAvgPopTime = avgPopTime;
         avgPopTime = totalPopTime / popCount;
 
         //Calculate maxima (Can be used as padding)
         //The faster your fastest the harder the game can be
-        if (time < minPopTime) minPopTime = time;
-        if (time > maxPopTime) maxPopTime = time;
+        if (popTime < minPopTime) minPopTime = popTime;
+        if (popTime > maxPopTime) maxPopTime = popTime;
 
 
         //Keep the bias in-between .01 and .02 percent, the higher that is the more likely the player is to be within average!
@@ -251,17 +257,17 @@ public class LogicEngine {
         boolean INTRO_LEVEL = popCount <= 5; //User is warming up
         boolean BEGINNER_LEVEL = popCount > 5 && popCount <= 20; //Early Stages
         boolean INTERMEDIATE_LEVEL = popCount > 20 && popCount <= 45; //Next range, 100 may be a little too high
-        boolean ADVANCED_LEVEL = popCount > 45 && popCount <= 100; // This is where you start getting time for excellents
+        boolean ADVANCED_LEVEL = popCount > 45 && popCount <= 100; // This is where you start getting popTime for excellents
         boolean MASTER_LEVEL = popCount > 100 && popCount <= 200; // User is a master, this is quite a feat!
 
         //Define conditions, Percentages in relation to avgpoptime that define what you have to beat.
-        boolean EXCEL_CONDITION = time <= avgPopTime - (avgPopTime * .20); //player is 20% better than average
-        boolean GREAT_CONDITION = time <= avgPopTime - (avgPopTime * .10); //player is 10% better than average
-        boolean GOOD_CONDITION = time <= avgPopTime + (avgPopTime * .10); //player is within 10% of average time
+        boolean EXCEL_CONDITION = popTime <= avgPopTime - (avgPopTime * .20); //player is 20% better than average
+        boolean GREAT_CONDITION = popTime <= avgPopTime - (avgPopTime * .10); //player is 10% better than average
+        boolean GOOD_CONDITION = popTime <= avgPopTime + (avgPopTime * .10); //player is within 10% of average popTime
 
 
         //NAME SCHEME -> LEVEL_TIME_ADJUSTMENT_CONDITION;
-        //Define Bias to be added as the player beats their average time. in Percentages;
+        //Define Bias to be added as the player beats their average popTime. in Percentages;
         final double BEG_TIME_BIAS_ADJ_EXCEL = .0050;
         final double BEGR_TIME_BIAS_ADJ_GREAT = .0030;
         final double INTER_TIME_BIAS_ADJ_EXCEL = .0015;
@@ -275,18 +281,21 @@ public class LogicEngine {
         //RNG
         int chance = genInt(0, 100);
 
-        //Initial Stage Level
-        level = "NEW GAME";
+        //Check warp type;
+        Type type = warp.getType();
+
 
         //BEGIN SCORING LOGIC HERE
         //The labels are also styled here, if that's what you;re looking for!
-        if (type.equals("NORM")) {
+
+        //If type is normal. [Long]
+        if (type == NORMAL) {
             if (INTRO_LEVEL) {
-                if (!level.equals("INTRO")) {
-                    level = "INTRO";
+                if (level != INTRO) {
+                    level = INTRO;
                     //graphics.order("Logic-UpdateLevel");
                 }
-                //Of course we would also take into consideration time
+                //Of course we would also take into consideration popTime
                 //Label
                 qualityLabel.setText(context.getResources().getString(R.string.label_score_getready) + " +" + 5);
                 qualityLabel.setTextColor(Color.BLACK);
@@ -301,18 +310,18 @@ public class LogicEngine {
 
                 score += 10;
             } else if (BEGINNER_LEVEL) {
-                if (!level.equals("BEGINNER")) {
-                    level = "BEGINNER";
+                if (level != BEGINNER) {
+                    level = BEGINNER;
                     graphics.order("Logic-UpdateLevel");
                 }
 
                 if (EXCEL_CONDITION) {
                     score += 10;
-                    //Also add time ?
+                    //Also add popTime ?
 
                     //We only want this to happen 2-4 times randomly
                     if (chance % genInt(2, 4) == 0) {
-                        //add time
+                        //add popTime
                         setTime(getTime() + 1, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Sec!");
                         avgPopTime -= avgPopTime * BEG_TIME_BIAS_ADJ_EXCEL;
@@ -337,7 +346,7 @@ public class LogicEngine {
 
                     //We only want this to happen 2-4 times randomly
                     if (chance % genInt(2, 4) == 0) {
-                        //add time
+                        //add popTime
                         setTime(getTime() + 1, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Sec!");
                         avgPopTime -= avgPopTime * BEGR_TIME_BIAS_ADJ_GREAT;
@@ -392,18 +401,18 @@ public class LogicEngine {
 
             } else if (INTERMEDIATE_LEVEL) {
 
-                if (!level.equals("INTERMEDIATE")) {
-                    level = "INTERMEDIATE";
+                if (level != INTERMEDIATE) {
+                    level = INTERMEDIATE;
                     graphics.order("Logic-UpdateLevel");
                 }
 
                 if (EXCEL_CONDITION) {
                     score += 15;
-                    //Also add time ?
+                    //Also add popTime ?
 
-                    //We only want this to happen around third the time
+                    //We only want this to happen around third the popTime
                     if (chance % 3 == 0) {
-                        //add time
+                        //add popTime
                         setTime(getTime() + 2, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
                         //make it slightly harder
@@ -427,11 +436,11 @@ public class LogicEngine {
 
 
                 } else if (GREAT_CONDITION) {
-                    //Also add time ?
+                    //Also add popTime ?
 
-                    //We only want this to happen around a third the time
+                    //We only want this to happen around a third the popTime
                     if (chance % 3 == 0) {
-                        //add time
+                        //add popTime
                         setTime(getTime() + 1, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Sec!");
                         //make it slightly harder
@@ -487,18 +496,18 @@ public class LogicEngine {
                 }
             } else if (ADVANCED_LEVEL) {
 
-                if (!level.equals("ADVANCED")) {
-                    level = "ADVANCED";
+                if (level != ADVANCED) {
+                    level = ADVANCED;
                     graphics.order("Logic-UpdateLevel");
                 }
 
                 if (EXCEL_CONDITION) {
 
-                    //Also add time ?
+                    //Also add popTime ?
 
-                    //We only want this to happen around half the time
+                    //We only want this to happen around half the popTime
                     if (chance % 2 == 0) {
-                        //add time
+                        //add popTime
                         setTime(getTime() + 2, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
                         //make it slightly harder
@@ -523,9 +532,9 @@ public class LogicEngine {
 
                 } else if (GREAT_CONDITION) {
 
-                    //We only want this to happen around a third of the time
+                    //We only want this to happen around a third of the popTime
                     if (chance % 3 == 0) {
-                        //add time
+                        //add popTime
                         setTime(getTime() + 2, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
 
@@ -567,7 +576,7 @@ public class LogicEngine {
                     score += 10;
                 } else {
 
-                    //Dynamic loss time
+                    //Dynamic loss popTime
                     int loss = DIFF_LEVEL == Difficulties.EASY ? 3 :
                             DIFF_LEVEL == Difficulties.INTER ? 4 :
                                     DIFF_LEVEL == Difficulties.HARD ? 5 : 7;
@@ -589,8 +598,8 @@ public class LogicEngine {
                     score += 7;
                 }
             } else if (MASTER_LEVEL) {
-                if (!level.equals("MASTER")) {
-                    level = "MASTER";
+                if (level != MASTER) {
+                    level = MASTER;
                     graphics.order("Logic-UpdateLevel");
                 }
 
@@ -598,9 +607,9 @@ public class LogicEngine {
                 if (EXCEL_CONDITION) {
 
 
-                    //We only want this to happen around half the time
+                    //We only want this to happen around half the popTime
                     if (chance % 2 == 0) {
-                        //add time
+                        //add popTime
                         setTime(getTime() + 4, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 4 + " Secs!");
                         //make it slightly harder
@@ -630,9 +639,9 @@ public class LogicEngine {
 
                 } else if (GREAT_CONDITION) {
 
-                    //We only want this to happen around half the time
+                    //We only want this to happen around half the popTime
                     if (chance % 2 == 0) {
-                        //add time
+                        //add popTime
                         setTime(getTime() + 2, false);
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 2 + " Secs!");
                         //make it slightly harder
@@ -676,7 +685,7 @@ public class LogicEngine {
                     score += 15;
                 } else {
 
-                    //Dynamic loss time
+                    //Dynamic loss popTime
                     int loss = DIFF_LEVEL == Difficulties.EASY ? 5 :
                             DIFF_LEVEL == Difficulties.INTER ? 6 :
                                     DIFF_LEVEL == Difficulties.HARD ? 7 : 10;
@@ -708,21 +717,26 @@ public class LogicEngine {
         }
 
 
-        //If a bad type is popped, process the consequences here
-        if (type.equals("BLKHOLE")) {
-            switch (getDiffLevel()) {
-                case EASY:
-                    setTime(time - Punishment.EASY.value, false);
-                    break;
-                case INTER:
-                    setTime(time - Punishment.INTER.value, false);
-                    break;
-                case HARD:
-                    setTime(time - Punishment.HARD.value, false);
-                    break;
-                default:
-                    //Should hopefully never reach here but just in case
-                    throw new IllegalArgumentException("Invalid diff level provided!");
+        //What happens for blackholes?
+        if (type == Type.BLACKHOLE) {
+            if (!warp.isMissed()) {
+                switch (getDiffLevel()) {
+                    case EASY:
+                        setTime(getTime() - Punishment.EASY.value, false);
+                        break;
+                    case INTER:
+                        setTime(getTime() - Punishment.INTER.value, false);
+                        break;
+                    case HARD:
+                        setTime(getTime() - Punishment.HARD.value, false);
+                        break;
+                    default:
+                        //Should hopefully never reach here but just in case
+                        throw new IllegalArgumentException("Invalid diff level provided!");
+                }
+            } else {
+                //50 points rewarded for getting rid of black hole;
+                score += 50;
             }
         }
 
@@ -821,6 +835,11 @@ public class LogicEngine {
     public static Mode State() {
         return state;
     }
+
+    //Return ser progression
+    public static Level getUserProgression() {
+        return level;
+    }
     //End Game methods
 
     //Internal Methods
@@ -868,7 +887,7 @@ public class LogicEngine {
                     }
 
                 default:
-                    logLevel("Invalid messaage passed to Logic-Engine -> " + message, Level.WARNING);
+                    logLevel("Invalid messaage passed to Logic-Engine -> " + message, java.util.logging.Level.WARNING);
             }
         }
 
@@ -879,6 +898,8 @@ public class LogicEngine {
 
     //IMPORTANT <----GAMELOOP IS HERE---->
     private void newContextGameLoop(final Context context) {
+
+        level = INTRO;
 
 
         //Connect to the game screen
@@ -898,7 +919,11 @@ public class LogicEngine {
                     userTouchX = event.getX();
                     userTouchY = event.getY();
 
+                    //Vars
                     Warp warp = null;
+                    AlphaAnimation fadeInDissolve = null;
+
+
                     //Find the warp
                     for (int x = 0; x < gameArea.getChildCount(); x++) {
                         if (gameArea.getChildAt(x) instanceof Warp) {
@@ -911,8 +936,9 @@ public class LogicEngine {
                         warp.getHitRect(hitBox);
                         //It's a miss then!
                         if (!hitBox.contains((int) userTouchX, (int) userTouchY)) {
+
                             //Are they playing in the right mode?
-                            if (perfectMode) {
+                            if (perfectMode && warp.getType() != BLACKHOLE) {
                                 //How much are they punished?
                                 int loss =
                                         DIFF_LEVEL == Difficulties.EASY ? Punishment.MISS_EASY.value :
@@ -928,7 +954,7 @@ public class LogicEngine {
                                 //Where do we gen the animation?
                                 final RelativeLayout.LayoutParams missLocation = warp.getPosition();
                                 //Label Animation
-                                AlphaAnimation fadeInDissolve = new AlphaAnimation(0, 1);
+                                fadeInDissolve = new AlphaAnimation(0, 1);
                                 fadeInDissolve.setDuration(400);
 
                                 //Tweak the animation here by fading it out onEnd() and translating it onStart()
@@ -960,8 +986,6 @@ public class LogicEngine {
                                 missLocation.leftMargin = missLocation.leftMargin + 50;
                                 missLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
                                 missLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
-
-                                gameArea.addView(qualityLabel, missLocation);
                                 qualityLabel.startAnimation(fadeInDissolve);
 
                                 //Subtract time;
@@ -969,15 +993,70 @@ public class LogicEngine {
 
 
                                 //"Click the warp"
-                                for (int x = 0; x < gameArea.getChildCount(); x++) {
-                                    if (gameArea.getChildAt(x) instanceof Warp) {
-                                        //Two critical sections!
-                                        ((Warp) gameArea.getChildAt(x)).markMissed();//Disables scoring
-                                        gameArea.getChildAt(x).callOnClick(); //Call the onclick of the warp
-                                    }
-                                }
+                                //Two critical sections!
+                                warp.markMissed();
+                                warp.callOnClick();
+
+                                //Finally add label
+                                gameArea.addView(qualityLabel, missLocation);
                             } else {
-                                Log.i("Logic Engine=>", " User Missed warp!");
+                                if (warp.getType() == BLACKHOLE) {
+
+
+                                    //Declare Label
+                                    final TextView qualityLabel = new TextView(context);
+
+                                    //Where do we gen the animation?
+                                    final RelativeLayout.LayoutParams missLocation = warp.getPosition();
+                                    //Label Animation
+                                    fadeInDissolve = new AlphaAnimation(0, 1);
+                                    fadeInDissolve.setDuration(400);
+
+                                    //Tweak the animation here by fading it out onEnd() and translating it onStart()
+                                    fadeInDissolve.setAnimationListener(new Animation.AnimationListener() {
+                                        @Override
+                                        public void onAnimationStart(Animation animation) {
+                                            qualityLabel.animate().translationXBy(40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                                            qualityLabel.animate().translationYBy(-40).setDuration(500).setInterpolator(new AccelerateDecelerateInterpolator()).start();
+                                        }
+
+                                        @Override
+                                        public void onAnimationEnd(Animation animation) {
+                                            qualityLabel.animate().alpha(0f).setDuration(400).setInterpolator(new DecelerateInterpolator()).start();
+                                        }
+
+                                        @Override
+                                        public void onAnimationRepeat(Animation animation) {
+
+                                        }
+                                    });
+
+
+                                    //Design Label
+                                    qualityLabel.setText(context.getResources().getString(R.string.label_blackhole_good));
+                                    qualityLabel.setTextColor(Color.GREEN);
+
+
+                                    missLocation.topMargin = missLocation.topMargin + 100;
+                                    missLocation.leftMargin = missLocation.leftMargin + 50;
+                                    missLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                                    missLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                                    gameArea.addView(qualityLabel, missLocation);
+                                    qualityLabel.startAnimation(fadeInDissolve);
+
+
+                                    //Label is created
+
+
+                                    // Again, two crucial steps
+                                    warp.markMissed(); //mark missed, so user doesn't lose points;
+                                    warp.callOnClick(); //Run onclick, ADJUSTS with type.
+
+
+                                } else {
+                                    Log.i("Logic Engine=>", " User Missed warp!");
+                                }
                             }
                         }
                     }
@@ -1238,13 +1317,13 @@ public class LogicEngine {
         userTouchY = 0;
         maxPopTime = 0.0;
         minPopTime = 5.0;
-        level = "INTRO";
+        level = INTRO;
         score = 0;
 
         gameTimer.cancel();
 
 
-        //Dont forget thhis program will break
+        //Don't edit this.
         state = Mode.IDLE; //Lets graphics handler proceed
 
         //Wait for it to finish
@@ -1445,6 +1524,39 @@ public class LogicEngine {
         public int ID() {
             return this.level;
         }
+
+    }
+
+    //This is much easier way of handling all the types
+    enum Type {
+        NORMAL,
+        BLACKHOLE,
+        SPLITTER,
+        WORMHOLE
+
+
+    }
+
+
+    //used to represent the current progression of the player.
+    enum Level {
+        INTRO(0),
+        BEGINNER(1),
+        INTERMEDIATE(2),
+        ADVANCED(3),
+        MASTER(4),
+        LEGENDARY(5); // Not used yet.
+
+        private int value = 0;
+
+        Level(int val) {
+            value = val;
+        }
+
+        public int value() {
+            return value;
+        }
+
 
     }
 }

@@ -10,6 +10,7 @@ import android.view.ViewGroup;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
+import android.view.animation.CycleInterpolator;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
@@ -26,6 +27,7 @@ import java.util.logging.Level;
 import static com.justtap.comp.LogicEngine.Difficulties.EASY;
 import static com.justtap.comp.LogicEngine.Difficulties.HARD;
 import static com.justtap.comp.LogicEngine.Difficulties.INTER;
+import static com.justtap.comp.LogicEngine.getUserProgression;
 import static com.justtap.utl.Numbers.genInt;
 import static com.justtap.utl.Printers.logLevel;
 
@@ -55,11 +57,13 @@ public class GraphicsHandler {
     private static LogicEngine.Mode state = LogicEngine.Mode.IDLE;
 
 
-    //Constants
+    //Animation Constants
+    private long WARP_CYCLE_SPEED = 50;
     private long WARP_BLINK_DELAY_IN = 500; // Amount in ms, before warp fades in
     private long WARP_BLINK_DELAY_OUT = 400; //Amount in ms, before warp fades out;
     private long WARP_PULSE_DELAY_IN = 400;
     private long WARP_PULSE_DELAY_OUT = 400;
+
 
 
     private GraphicsHandler() {
@@ -182,24 +186,19 @@ public class GraphicsHandler {
             GraphicsHandler.isGamespaceEmpty = false;
             //Declare our warp;
 
-
+            // #Define
             final Warp warp;
-            //Create the warp at a specified difficulty
-            if (difficulty == EASY)
-                warp = new Warp(EASY.ID(), context, this);
-            else if (difficulty == INTER) {
-                warp = new Warp(INTER.ID(), context, this);
-            } else {
-                warp = new Warp(HARD.ID(), context, this);
-            }
+            //Create the warp
+            warp = new Warp(getUserProgression(), context, this);
+
 
 
             //style warp according to type (if there is no defaults)
             //Id rather focus on getting core to work right now, come to later
             //add to UI
 
-            final RelativeLayout gamescreen = (RelativeLayout) ((Activity) context).getWindow().getDecorView().findViewById(R.id.GAME__Area);
-            if (gamescreen == null) {
+            final RelativeLayout gameArea = (RelativeLayout) ((Activity) context).getWindow().getDecorView().findViewById(R.id.GAME__Area);
+            if (gameArea == null) {
                 Log.e("Graphic Engine =>", "Gamescreen cannot be found!");
             }
 
@@ -215,14 +214,14 @@ public class GraphicsHandler {
             while (!valid) {
 
 
-                assert gamescreen != null;
+                assert gameArea != null;
 
                 //ALWAYS USE %'s it SCALES!!!!
                 //We want to add a random value between ten percent of the screens width for left margin
                 //Current best is between 30-40% for left and always minus 10 percent for right
-                position.leftMargin = genInt(0, gamescreen.getWidth() / 2) + genInt(0, Double.valueOf((gamescreen.getWidth() * .35)).intValue());
-                position.rightMargin = genInt(0, gamescreen.getWidth() / 2) - genInt(0, Double.valueOf((gamescreen.getWidth() * .1)).intValue());
-                position.topMargin = genInt(0, gamescreen.getHeight());
+                position.leftMargin = genInt(0, gameArea.getWidth() / 2) + genInt(0, Double.valueOf((gameArea.getWidth() * .35)).intValue());
+                position.rightMargin = genInt(0, gameArea.getWidth() / 2) - genInt(0, Double.valueOf((gameArea.getWidth() * .1)).intValue());
+                position.topMargin = genInt(0, gameArea.getHeight());
 
                 warp.setPosition(position);
 
@@ -233,7 +232,7 @@ public class GraphicsHandler {
                         warp.getMeasuredHeight() + " " + warp.getMeasuredWidth());
 
 
-                if (gamescreen.getHeight() - position.topMargin < 200) {
+                if (gameArea.getHeight() - position.topMargin < 200) {
                     continue;
                 } else {
                     valid = true;
@@ -245,17 +244,23 @@ public class GraphicsHandler {
                 @Override
                 public void onClick(View v) {
                     Log.e("WARP =>", "Warp tapped!");
+                    warp.getAnimation().cancel();
+                    warp.animate().alpha(0f).setDuration(10).start();
+                    warp.setAlpha(0);
 
 
-                    gamescreen.removeView(warp);
+                    gameArea.removeView(warp);
+
                     animationQueue.remove((warp));
-                    warp.animate().alpha(0f).start();
+
                     //Initiate scoring, initiate warp pop()
                     //This also spawns a new warp via a graphics handler req.
 
                     //Score, if not just a missed warp.
                     if (!warp.isMissed())
-                        LogicEngine.CalculateScore(warp.pop(), warp.getType(), position, context);
+                        LogicEngine.CalculateScore(warp.pop(), warp, position, context);
+                    else if (warp.isMissed() && warp.getType() == LogicEngine.Type.BLACKHOLE)
+                        LogicEngine.CalculateScore(warp.pop(), warp, position, context);
 
 
                     Log.i("Graphic Handler =>", "Removed Warp!");
@@ -276,8 +281,10 @@ public class GraphicsHandler {
                     new Runnable() {
                         @Override
                         public void run() {
+                            //Rotation Animation
+                            warp.animate().rotationBy(360).setInterpolator(new CycleInterpolator(WARP_CYCLE_SPEED)).setDuration(60000).start();
 
-
+                            //Warp animation
                             DecelerateInterpolator inter = new DecelerateInterpolator();
                             ani.setDuration(WARP_BLINK_DELAY_OUT);
                             ani.setInterpolator(inter);
@@ -335,7 +342,7 @@ public class GraphicsHandler {
             ((Activity) context).runOnUiThread(new Runnable() {
                 @Override
                 public void run() {
-                    gamescreen.addView(warp, finalPosition);
+                    gameArea.addView(warp, finalPosition);
 
 
                 }
