@@ -108,7 +108,7 @@ public class Warp extends android.support.v7.widget.AppCompatImageView{
         if (level.value() < 2) {
             type = LogicEngine.Type.NORMAL;
         }
-        if (level.value() > 2) {
+        if (level.value() >= 2) {
             //RNG calculations for a black hole
             int rand = genInt(0, 10);
             if (rand == 4) {
