@@ -4,6 +4,7 @@ package com.justtap.comp;
 import android.annotation.SuppressLint;
 import android.app.Activity;
 import android.content.Context;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.Rect;
 import android.support.annotation.NonNull;
@@ -19,8 +20,12 @@ import android.widget.RelativeLayout;
 import android.widget.TextView;
 
 import com.justtap.R;
+import com.justtap.act.GameOver_main;
+import com.justtap.comp.models.Settings;
+import com.justtap.comp.models.SettingsManager;
 
 import java.io.InvalidObjectException;
+import java.util.HashMap;
 import java.util.Timer;
 import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
@@ -36,6 +41,7 @@ import static com.justtap.comp.LogicEngine.Level.INTRO;
 import static com.justtap.comp.LogicEngine.Level.MASTER;
 import static com.justtap.comp.LogicEngine.Mode.AFTERTIME;
 import static com.justtap.comp.LogicEngine.Mode.BUSY;
+import static com.justtap.comp.LogicEngine.Mode.CLOSE;
 import static com.justtap.comp.LogicEngine.Mode.DONE;
 import static com.justtap.comp.LogicEngine.Mode.GAME;
 import static com.justtap.comp.LogicEngine.Mode.GAMEOVER;
@@ -67,11 +73,13 @@ public class LogicEngine {
     //MessageQueue
     private static LinkedBlockingQueue<String> messageQueue=new LinkedBlockingQueue<String>();
 
+    private static boolean isRunning = false;
 
     //Singleton + core components
     private static LogicEngine instance; //The singleton
     private static GraphicsHandler graphics; //The graphics handler
     private static SoundHandler sound; //The sound handler
+    private static Settings settings;
 
     //Our Loop components
     private static  ExecutorService corePool = Executors.newFixedThreadPool(3); //3 is a good number.
@@ -98,6 +106,10 @@ public class LogicEngine {
     private static Long time;
     //Hold the timer to prevent race conditions when directly modifying the time
     private static boolean timeModding = false;
+    //The amount of blackholes popped
+    private static long blackHolePopCount = 0;
+    //The amount of warps missed
+    private static long missCount = 0;
     //The amount of warps popped
     private static long popCount = 0; //If surpasses set numbers, difficulty will change
     //Average pop time of the user, will also fluctuate difficulty
@@ -108,14 +120,19 @@ public class LogicEngine {
     private static double minPopTime = 99999.0;
     //Slowest pop time
     private static double maxPopTime = 0;
-    //Of course the score, keep this static
+    //Of course the score, keep these all static
     private static long score = 0;
+
+    //Package for all these values
+    private static HashMap<String, Object> finalStats;
+
     /**
      * @param time
      * @param type
      */
 
     private static double oldAvgPopTime = 0;
+    private static boolean firstTap = true;
 
     static {
         fpsTimer = new Timer(true);
@@ -128,24 +145,33 @@ public class LogicEngine {
     private float userTouchY = 0f;
     //Control
     private boolean halt = false; //This serves as an interrupt.
-    private boolean isGameOver = false; //Is the game ended
     //End Control
+    private boolean isGameOver = false; //Is the game ended
     /**
      * Break LogicEngine Global Parameter debug Mode before final prod release
      * This is to prevent memory tampering by some clever reverse engineering; At least make it a bti harder?!
      */
     private boolean debugMode = true; //Triggers special debug state.
+    private boolean testingGameOver = true; // Allows debug mode elevation + gameending
     private boolean finishedReset = true;
 
     /**
      * @param callingActivityContext
      */
     //Our Base constructor, initiates the game loop, called with the activity screen's context (Don't worry it's trashed when the loop is done!)
-    private LogicEngine(final Context callingActivityContext, final Mode mode) {
+    private LogicEngine(final Context callingActivityContext, boolean startInGame) {
+        isRunning = true;
+
+
         //Link Graphics
         linkGraphics(GraphicsHandler.getInstance(this));
 
-        if (mode == Mode.GAME) {
+        //Link settings
+        settings = SettingsManager.get(callingActivityContext);
+
+
+        //If true, the engine engages into game mode immediately when called!
+        if (startInGame) {
             //Start game loop
             newContextGameLoop(callingActivityContext);
         }
@@ -153,16 +179,25 @@ public class LogicEngine {
 
     }
 
+    public static boolean IdleAndNoGame() {
+        return (state == CLOSE) && (instance != null);
+    }
+
     //ONLY way we work with the Logic Core
-    public static LogicEngine getInstance(Context context, Mode mode) {
+    public static LogicEngine getInstance(Context context, boolean startInGameMode) {
         if (instance == null) {
-            instance = new LogicEngine(context, mode);
+            instance = new LogicEngine(context, startInGameMode);
+
+            if (!startInGameMode) {
+                state = CLOSE;
+            }
 
             return instance;
         } else {
             return instance;
         }
     }
+
 
     //Calculates score and requests score update
     //Reminder that current Types are NORM,BLKHOLE,WRMHOLE
@@ -178,10 +213,11 @@ public class LogicEngine {
 
 
         //If first move, start game
-        if (popCount == 0) {
+        if (popCount == 0 || firstTap) {
             state = Mode.GAME;
             Log.i("Logic Engine=>", " User tapped a warp!");
             unpauseTimer();
+            firstTap = false;
 
         }
 
@@ -215,6 +251,15 @@ public class LogicEngine {
 
         //Label That pops up for user, saying how good they did
         final TextView qualityLabel = new TextView(context);
+        //Style the quality labels;
+        qualityLabel.setTypeface(SettingsManager.get(context).getFont(Settings.Property.Font_PrimaryLabel));
+        qualityLabel.setTextSize(Settings.spUnit, 18);
+
+        //Parse colors Material Green,Blue,Black,Red. In order
+        int excellentColor = settings.excellentColor;
+        int greatColor = settings.greatColor;
+        int goodColor = settings.goodColor;
+        int okColor = settings.okColor;
 
 
         //Fade In animation for Float Text
@@ -298,7 +343,7 @@ public class LogicEngine {
                 //Of course we would also take into consideration popTime
                 //Label
                 qualityLabel.setText(context.getResources().getString(R.string.label_score_getready) + " +" + 5);
-                qualityLabel.setTextColor(Color.BLACK);
+                qualityLabel.setTextColor(goodColor);
 
                 popLocation.topMargin = popLocation.topMargin + 100;
                 popLocation.leftMargin = popLocation.leftMargin + 50;
@@ -326,11 +371,12 @@ public class LogicEngine {
                         qualityLabel.setText(context.getResources().getString(R.string.bonustimegreat) + " +" + 1 + " Sec!");
                         avgPopTime -= avgPopTime * BEG_TIME_BIAS_ADJ_EXCEL;
                     } else {
-                        qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 10);
+
+                        avgPopTime -= avgPopTime * BEG_TIME_BIAS_ADJ_EXCEL;
                     }
 
                     //Label
-                    qualityLabel.setTextColor(Color.GREEN);
+                    qualityLabel.setTextColor(excellentColor);
 
                     popLocation.topMargin = popLocation.topMargin + 100;
                     popLocation.leftMargin = popLocation.leftMargin + 50;
@@ -358,7 +404,7 @@ public class LogicEngine {
 
                     //Label
 
-                    qualityLabel.setTextColor(Color.BLUE);
+                    qualityLabel.setTextColor(greatColor);
 
                     popLocation.topMargin = popLocation.topMargin + 100;
                     popLocation.leftMargin = popLocation.leftMargin + 50;
@@ -370,9 +416,11 @@ public class LogicEngine {
                     qualityLabel.startAnimation(fadeInDissolve);
 
                 } else if (GOOD_CONDITION) {
+
+
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 5);
-                    qualityLabel.setTextColor(Color.BLACK);
+                    qualityLabel.setTextColor(goodColor);
 
                     popLocation.topMargin = popLocation.topMargin + 100;
                     popLocation.leftMargin = popLocation.leftMargin + 50;
@@ -386,7 +434,7 @@ public class LogicEngine {
                 } else {
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_okay) + " +" + 3);
-                    qualityLabel.setTextColor(Color.RED);
+                    qualityLabel.setTextColor(okColor);
 
                     popLocation.topMargin = popLocation.topMargin + 100;
                     popLocation.leftMargin = popLocation.leftMargin + 50;
@@ -423,7 +471,7 @@ public class LogicEngine {
                     }
 
                     //Label
-                    qualityLabel.setTextColor(Color.GREEN);
+                    qualityLabel.setTextColor(excellentColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -453,7 +501,7 @@ public class LogicEngine {
 
 
                     //Label
-                    qualityLabel.setTextColor(Color.BLUE);
+                    qualityLabel.setTextColor(greatColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -467,7 +515,7 @@ public class LogicEngine {
                 } else if (GOOD_CONDITION) {
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 10);
-                    qualityLabel.setTextColor(Color.BLACK);
+                    qualityLabel.setTextColor(goodColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -482,7 +530,7 @@ public class LogicEngine {
                 } else {
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_okay) + " +" + 5);
-                    qualityLabel.setTextColor(Color.RED);
+                    qualityLabel.setTextColor(okColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -518,7 +566,7 @@ public class LogicEngine {
                     }
 
                     //Label
-                    qualityLabel.setTextColor(Color.GREEN);
+                    qualityLabel.setTextColor(excellentColor);
 
                     popLocation.topMargin = popLocation.topMargin + 100;
                     popLocation.leftMargin = popLocation.leftMargin + 50;
@@ -547,7 +595,7 @@ public class LogicEngine {
 
                     //Label
 
-                    qualityLabel.setTextColor(Color.BLUE);
+                    qualityLabel.setTextColor(greatColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -563,7 +611,7 @@ public class LogicEngine {
 
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 10);
-                    qualityLabel.setTextColor(Color.BLACK);
+                    qualityLabel.setTextColor(goodColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -584,7 +632,7 @@ public class LogicEngine {
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_minustime) + " -" + loss + " Secs!");
                     setTime(getTime() - loss, false);
-                    qualityLabel.setTextColor(Color.RED);
+                    qualityLabel.setTextColor(Color.parseColor("#D32F2F"));
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -624,7 +672,7 @@ public class LogicEngine {
 
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_excellent) + " +" + 30);
-                    qualityLabel.setTextColor(Color.GREEN);
+                    qualityLabel.setTextColor(excellentColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -656,7 +704,7 @@ public class LogicEngine {
 
                     //Label
 
-                    qualityLabel.setTextColor(Color.BLUE);
+                    qualityLabel.setTextColor(greatColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -672,7 +720,7 @@ public class LogicEngine {
 
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_score_good) + " +" + 15);
-                    qualityLabel.setTextColor(Color.BLACK);
+                    qualityLabel.setTextColor(goodColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -693,7 +741,7 @@ public class LogicEngine {
                     //Label
                     qualityLabel.setText(context.getResources().getString(R.string.label_minustime) + " -" + loss + " Secs!");
                     setTime(getTime() - loss, false);
-                    qualityLabel.setTextColor(Color.RED);
+                    qualityLabel.setTextColor(okColor);
 
                     RelativeLayout.LayoutParams topCorner = popLocation;
                     topCorner.topMargin = topCorner.topMargin + 100;
@@ -720,6 +768,20 @@ public class LogicEngine {
         //What happens for blackholes?
         if (type == Type.BLACKHOLE) {
             if (!warp.isMissed()) {
+
+                //Label
+                qualityLabel.setText("BAD! \n-Time");
+                qualityLabel.setTextColor(okColor);
+
+                popLocation.topMargin = popLocation.topMargin + 100;
+                popLocation.leftMargin = popLocation.leftMargin + 50;
+                popLocation.width = ViewGroup.LayoutParams.WRAP_CONTENT;
+                popLocation.height = ViewGroup.LayoutParams.WRAP_CONTENT;
+
+                gameScreen.addView(qualityLabel, popLocation);
+                qualityLabel.startAnimation(fadeInDissolve);
+
+
                 switch (getDiffLevel()) {
                     case EASY:
                         setTime(getTime() - Punishment.EASY.value, false);
@@ -849,6 +911,17 @@ public class LogicEngine {
         state = newState;
     }
 
+    public static HashMap<String, Object> getFinalScores() {
+        if (state == GAMEOVER)
+            return finalStats;
+        else {
+            throw new IllegalAccessError("Cannot access final stats while game is in progress! *Duh*");
+        }
+    }
+
+
+    //LOOP SECTION
+
     //Check queue
     private void serve(Context context) {
 
@@ -893,12 +966,9 @@ public class LogicEngine {
 
     }
 
-
-    //LOOP SECTION
-
     //IMPORTANT <----GAMELOOP IS HERE---->
     private void newContextGameLoop(final Context context) {
-
+        //Set level, although it isn't used yet.
         level = INTRO;
 
 
@@ -914,7 +984,7 @@ public class LogicEngine {
             @Override
             public boolean onTouch(View v, MotionEvent event) {
                 //Touch logic
-                if (!timeModding) {
+                if (!timeModding && state != Mode.PAUSED && state != Mode.PAUSING) {
                     userTouchCount++;
                     userTouchX = event.getX();
                     userTouchY = event.getY();
@@ -979,7 +1049,7 @@ public class LogicEngine {
 
                                 //Design Label
                                 qualityLabel.setText(context.getResources().getString(R.string.label_score_miss) + " -" + loss);
-                                qualityLabel.setTextColor(Color.RED);
+                                qualityLabel.setTextColor(Color.parseColor("#D32F2F"));
 
 
                                 missLocation.topMargin = missLocation.topMargin + 100;
@@ -996,12 +1066,17 @@ public class LogicEngine {
                                 //Two critical sections!
                                 warp.markMissed();
                                 warp.callOnClick();
+                                //Increment miss count.
+                                missCount++;
 
                                 //Finally add label
                                 gameArea.addView(qualityLabel, missLocation);
                             } else {
+                                //If it was infact a blackhole.
                                 if (warp.getType() == BLACKHOLE) {
 
+                                    //Increment the blackhole count
+                                    blackHolePopCount++;
 
                                     //Declare Label
                                     final TextView qualityLabel = new TextView(context);
@@ -1034,7 +1109,7 @@ public class LogicEngine {
 
                                     //Design Label
                                     qualityLabel.setText(context.getResources().getString(R.string.label_blackhole_good));
-                                    qualityLabel.setTextColor(Color.GREEN);
+                                    qualityLabel.setTextColor(Color.parseColor("#4CAF50")); //Transfer this to a setting eventually
 
 
                                     missLocation.topMargin = missLocation.topMargin + 100;
@@ -1087,6 +1162,9 @@ public class LogicEngine {
 
                                 frames = 0;
                             }
+                            if (halt) {
+                                this.cancel();
+                            }
                         }
                     }, 0, 1000);
                     //End fps timer definition (May convert to more modular runnable later
@@ -1096,19 +1174,20 @@ public class LogicEngine {
                 //Initial UI Updates (So the user wont see the clock at zero)
                 graphics.order("Logic-UpdateTime");
 
-                startTimer();
-                pauseTimer(); //Pause the timer
-
-
-                //Timer will unpause on first warp touch
+                //Start the timer
+                startTimer(context);
+                //Pause the timer
+                pauseTimer();
+                //Timer will resume on first warp touch
 
                 //This is the basis of our Logic Loop
                 while (!halt) {
-
+                    //Check for messages
                     if (!isPaused) {
                         serve(context);
                     }
 
+                    //Pause breaker
                     while (isPaused) {
                         //Serve Only
                         serve(context); //Check messages
@@ -1116,10 +1195,17 @@ public class LogicEngine {
                     }
 
 
+
                     //If the game screen is empty, order a warp()
                     if (GraphicsHandler.isGamespaceEmpty) {
+
                         graphics.order("Warp-" + getDiffLevel());
-                        Log.i("Logic Engine=>", "Order placed");
+                        Log.i("DEBUG=>", "Order placed for warp!");
+                        try {
+                            Thread.sleep(1);
+                        } catch (InterruptedException ie) {
+                            Log.e("Logic =>", " Error in GameLoop: " + ie.getLocalizedMessage());
+                        }
                     }
 
 
@@ -1154,20 +1240,6 @@ public class LogicEngine {
         });
     }
 
-    //MENU LOOP
-    private void newContextMenuLoop(Context context) {
-        /*
-        This loop will need to handle displaying the menus and handling interaction logic for them
-         */
-    }
-
-    //PAUSE LOOP
-    @SuppressWarnings("unused")
-    private void pauseLoop(Context context) {
-        //Empty for now, But will reveal the opacity and reenable control fo the menu
-    }
-
-
     //Switches modes and returns a reference to the engine
     public LogicEngine switchMode(Mode mode, Context callingActivityContext) {
 
@@ -1183,32 +1255,25 @@ public class LogicEngine {
                 //Transition from Game.
                 if (state == Mode.GAME) {
                     halt = true;
-                    state = Mode.IDLE;
+                    //End the current game
+                    EndGame(callingActivityContext);
+                    state = Mode.MENU;
                 }
                 if (state != mode) {
                     if (halt) {
                         halt = false;
                     }
                     state = mode;
-                    newContextMenuLoop(callingActivityContext);
                 }
                 break;
             case GAME:
                 //Transition from menu
-                if (state == Mode.MENU) {
-                    halt = true;
-                    state = Mode.IDLE;
-                }
-                if (state != mode) {
-                    state = mode;
-                    newContextGameLoop(callingActivityContext);
-                }
+                NewGame(callingActivityContext);
                 break;
             case PAUSED: //Nothing as it leads to the same outcome
             case PAUSING:
                 state = PAUSING;
-                //if Engine is not already Paused
-                if (!isPaused) {
+
                     //Disable all warps
                     final RelativeLayout GameArea = (RelativeLayout) ((Activity) callingActivityContext).findViewById(R.id.GAME__Area);
                     for (int x = 0; x < GameArea.getChildCount(); x++) {
@@ -1222,14 +1287,16 @@ public class LogicEngine {
                     pauseTimer(); //Double lock just in case some legacy components still check for timer activity
                     //Update State
                     state = PAUSED;
-                }
+
+
                 break;
             case RESUMING:
                 //if Engine is Paused
-                if (isPaused) {
                     state = RESUMING;
                     isPaused = false; //Flip the control boolean
-                    unpauseTimer(); //unlock timer fully
+                if (!firstTap)
+                    unpauseTimer(); //unlock timer fully if not first tap
+
                     //unfreeze warps, if it isn't gameover or if debugmode
                     if (!isGameOver || debugMode) {
                         final RelativeLayout gamescreen = (RelativeLayout) ((Activity) callingActivityContext).findViewById(R.id.GAME__Area);
@@ -1250,8 +1317,6 @@ public class LogicEngine {
                         }
                     }
 
-
-                }
                 break;
             case GAMEOVER:
                 halt = true; //Break the game loop
@@ -1259,6 +1324,10 @@ public class LogicEngine {
                 pauseTimer();
                 state = mode;
                 graphics.order("Logic-GameOver");
+                break;
+            case CLOSE:
+                EndGame(callingActivityContext);
+                break;
             default:
                 return this;
 
@@ -1316,9 +1385,12 @@ public class LogicEngine {
         userTouchX = 0;
         userTouchY = 0;
         maxPopTime = 0.0;
-        minPopTime = 5.0;
+        minPopTime = 999999.0;
+        firstTap = true;
+
         level = INTRO;
         score = 0;
+
 
         gameTimer.cancel();
 
@@ -1365,9 +1437,100 @@ public class LogicEngine {
 
     }
 
+    //Basically we clear/disable the screen and put it in a paused state!
+    private void endGame(final Context context) {
+        switchMode(PAUSING, context); // pause the engine
+        state = GAMEOVER;
+
+        //End timer
+        gameTimer.cancel();
+        //So any possible reset wont pull a "Timer already cancelled"
+        gameTimer = null;
+
+
+        //The screen should be frozen. Clear screen.
+        graphics.order("Logic-EndGame");
+        //Keep in mind since we paused the engine, there is no default loop running
+        //Be sure to run the graphics loop
+        do {
+            graphics.update(context);
+        } while (GraphicsHandler.State() != DONE);
+
+        //Prepare intent to switch to gameover screen
+        Intent toGameOver = new Intent(context, GameOver_main.class);
+
+        //Set final data
+
+        finalStats = new HashMap<>();
+
+        finalStats.put("score", score);
+        finalStats.put("popCount", popCount);
+        finalStats.put("avgPopTime", avgPopTime);
+        finalStats.put("popTime", totalPopTime);
+        finalStats.put("maxTime", maxPopTime);
+        finalStats.put("minTime", minPopTime);
+        finalStats.put("missCount", missCount);
+
+        //Switch to gameover screen.
+        context.startActivity(toGameOver);
+
+
+    }
+
+    //Start NewGame after engine is closed
+    void NewGame(Context callingContext) {
+        if (state == CLOSE) {
+            newContextGameLoop(callingContext);
+        }
+    }
+
+    //This returns the engine to it's base state and exits gracefully
+    void EndGame(final Context context) {
+        //Halt Game
+        halt = true;
+
+        //Wait
+        try {
+            Thread.sleep(500);
+        } catch (InterruptedException ie) {
+            Log.e("Exit Logic =>", " Error while waiting for halt!");
+        }
+
+
+        //Reset all vars
+        popCount = 0L;
+        avgPopTime = 0.0;
+        totalPopTime = 0.0;
+        oldAvgPopTime = 0.0;
+        userTouchCount = 0L;
+        time = 0L;
+        userTouchX = 0;
+        userTouchY = 0;
+        maxPopTime = 0.0;
+        minPopTime = 999999.0;
+        firstTap = true;
+
+        level = INTRO;
+        score = 0;
+        if (gameTimer != null)
+            gameTimer.cancel();
+        halt = false;
+
+        //We've finished most major state changes
+
+        //Order the graphics to stop.
+        graphics.order("LOGIC-EndGame");
+
+
+        state = CLOSE; //set engine closed
+
+
+    }
+
     //End loops
     //Start the game timer;
-    private void startTimer() {
+    private void startTimer(final Context context) {
+        //Create new timer instance.
         gameTimer = new Timer(true);
         time = roundTime;
 
@@ -1380,7 +1543,7 @@ public class LogicEngine {
                 //Update the timer, believe it or not in the extreme you can catch the timer mid cycle
                 //Thats why it checks conditions again.
                 //noinspection ConstantConditions
-                if (!timeModding && state != PAUSED) {
+                if (!timeModding && !firstTap) {
                     //This is to fix continuity issues
 
                     //noinspection SynchronizeOnNonFinalField
@@ -1421,10 +1584,10 @@ public class LogicEngine {
 
                     if (!saved) {
                         //This is what happens when the timer hits zero
-                        if (!debugMode) {
+                        if (!debugMode || testingGameOver && popCount > 0) {
                             //End game
                             //UI End
-                            graphics.order("Logic-GameOver");
+                            endGame(context);
                             //Logic End
                             isGameOver = true;
                             state = GAMEOVER;
@@ -1483,6 +1646,7 @@ public class LogicEngine {
         AFTERTIME, //This can only be called when app is in debug mode!
         BUSY, // Mainly called when engine is doing something that should'nt be spammed (LIKE RESET)
         DONE,
+        CLOSE, //Done to return the engine and components to base state
         ERROR
 
 

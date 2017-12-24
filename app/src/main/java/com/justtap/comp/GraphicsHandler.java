@@ -7,11 +7,14 @@ import android.support.annotation.NonNull;
 import android.util.Log;
 import android.view.View;
 import android.view.ViewGroup;
+import android.view.animation.AccelerateDecelerateInterpolator;
 import android.view.animation.AccelerateInterpolator;
 import android.view.animation.AlphaAnimation;
 import android.view.animation.Animation;
 import android.view.animation.CycleInterpolator;
 import android.view.animation.DecelerateInterpolator;
+import android.view.animation.RotateAnimation;
+import android.view.animation.TranslateAnimation;
 import android.widget.ImageView;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
@@ -58,7 +61,7 @@ public class GraphicsHandler {
 
 
     //Animation Constants
-    private long WARP_CYCLE_SPEED = 50;
+    private long WARP_CYCLE_SPEED = 250;
     private long WARP_BLINK_DELAY_IN = 500; // Amount in ms, before warp fades in
     private long WARP_BLINK_DELAY_OUT = 400; //Amount in ms, before warp fades out;
     private long WARP_PULSE_DELAY_IN = 400;
@@ -87,6 +90,215 @@ public class GraphicsHandler {
     public static LogicEngine.Mode State() {
         return state;
     }
+
+    //Animations
+    public static void floatView(final long timeinmillis, final float distanceY, final float distanceX,
+                                 final boolean floatUpFirst, final View view, final Context context) {
+        ((Activity) context).runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                final TranslateAnimation floatDown = new TranslateAnimation(Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, 0.0f,
+                        Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, distanceY);
+                floatDown.setInterpolator(new AccelerateDecelerateInterpolator());
+                floatDown.setDuration(timeinmillis);
+
+
+                final TranslateAnimation floatUp = new TranslateAnimation(Animation.RELATIVE_TO_SELF, 0.0f, Animation.RELATIVE_TO_SELF, 0.0f,
+                        Animation.RELATIVE_TO_SELF, distanceY, Animation.RELATIVE_TO_SELF, 0.0f);
+                floatUp.setInterpolator(new AccelerateDecelerateInterpolator());
+                floatUp.setDuration(timeinmillis);
+
+                //Our animation loop begins here
+                //Float Down Triggers Float Up
+                floatDown.setAnimationListener(new Animation.AnimationListener() {
+                    @Override
+                    public void onAnimationStart(Animation animation) {
+                        view.animate().scaleXBy(-distanceX).setInterpolator(new AccelerateDecelerateInterpolator()).setDuration(timeinmillis);
+                    }
+
+                    @Override
+                    public void onAnimationEnd(Animation animation) {
+                        view.startAnimation(floatUp);
+                    }
+
+                    @Override
+                    public void onAnimationRepeat(Animation animation) {
+
+                    }
+                });
+                //Float Up Triggers Float Up
+                floatUp.setAnimationListener(new Animation.AnimationListener() {
+                    @Override
+                    public void onAnimationStart(Animation animation) {
+                        view.animate().scaleXBy(distanceX).setInterpolator(new AccelerateDecelerateInterpolator()).setDuration(timeinmillis);
+                    }
+
+                    @Override
+                    public void onAnimationEnd(Animation animation) {
+                        view.startAnimation(floatDown);
+                    }
+
+                    @Override
+                    public void onAnimationRepeat(Animation animation) {
+
+                    }
+                });
+
+                //Finally trigger the animation cycle
+                if (floatUpFirst)
+                    view.startAnimation(floatUp);
+                else
+                    view.startAnimation(floatDown);
+            }
+        });
+    }
+
+    public static void shakeView(final long timeinmillis, final float distance,
+                                 final View view, final Context context) {
+        final RotateAnimation rotateRightFull = new RotateAnimation(0, distance);
+        final RotateAnimation rotateZero = new RotateAnimation(distance, 0);
+        final RotateAnimation rotateLeftFull = new RotateAnimation(0, -distance);
+        final RotateAnimation rotateZeroFinal = new RotateAnimation(-distance, 0);
+
+        //Set interpolators
+
+        rotateRightFull.setInterpolator(new AccelerateDecelerateInterpolator());
+        rotateZero.setInterpolator(new AccelerateDecelerateInterpolator());
+        rotateLeftFull.setInterpolator(new AccelerateDecelerateInterpolator());
+        rotateZeroFinal.setInterpolator(new AccelerateDecelerateInterpolator());
+
+        //set Duration
+
+        rotateRightFull.setDuration(timeinmillis);
+        rotateZero.setDuration(timeinmillis);
+        rotateLeftFull.setDuration(timeinmillis);
+        rotateZeroFinal.setDuration(timeinmillis);
+
+        //Loop animations here
+        rotateRightFull.setAnimationListener(new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+
+            }
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                view.startAnimation(rotateZero);
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+
+            }
+        });
+
+        rotateZero.setAnimationListener(new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+
+            }
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                view.startAnimation(rotateLeftFull);
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+
+            }
+        });
+
+        rotateLeftFull.setAnimationListener(new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+
+            }
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                view.startAnimation(rotateZeroFinal);
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+
+            }
+        });
+
+        rotateZeroFinal.setAnimationListener(new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+
+            }
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                view.startAnimation(rotateRightFull);
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+
+            }
+        });
+
+        view.startAnimation(rotateRightFull);
+
+    }
+
+
+    //Message handling
+
+    public static void fadeView(final long timeinmillis, final float to, final float from, final boolean fadeOutFirst
+            , final View view, final Context context) {
+
+        final AlphaAnimation fadeOut = new AlphaAnimation(view.getAlpha(), to);
+        final AlphaAnimation fadeIn = new AlphaAnimation(view.getAlpha(), from);
+
+        fadeOut.setInterpolator(new AccelerateDecelerateInterpolator());
+        fadeIn.setInterpolator(new AccelerateDecelerateInterpolator());
+
+        fadeOut.setDuration(timeinmillis);
+        fadeIn.setDuration(timeinmillis);
+
+        fadeOut.setAnimationListener(new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+
+            }
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                view.startAnimation(fadeIn);
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+
+            }
+        });
+        fadeIn.setAnimationListener(new Animation.AnimationListener() {
+            @Override
+            public void onAnimationStart(Animation animation) {
+
+            }
+
+            @Override
+            public void onAnimationEnd(Animation animation) {
+                view.startAnimation(fadeOut);
+            }
+
+            @Override
+            public void onAnimationRepeat(Animation animation) {
+
+            }
+        });
+
+        view.startAnimation(fadeOut);
+
+    }
+    //GRAPHICS OPERATIONS
 
     //Where the magic happens, runs the graphic cycle, does'nt need to be looped, as the logic handles the main Looper
     void update(@NonNull final Context context) {
@@ -118,9 +330,6 @@ public class GraphicsHandler {
         });
     }
 
-
-    //Message handling
-
     private void updateScore(Context context) {
         final TextView scoreLabel = (TextView) ((Activity) context).findViewById(R.id.GAME_Scoreview);
 
@@ -134,7 +343,6 @@ public class GraphicsHandler {
             }
         });
     }
-    //GRAPHICS OPERATIONS
 
     @SuppressWarnings("StatementWithEmptyBody")
     private void serve(Context context) {
@@ -170,18 +378,24 @@ public class GraphicsHandler {
                     case "Logic-Reset":
                         reset(context);
                         break;
+                    //Clears screen and resets timer
+                    case "Logic-EndGame":
+                        end(context);
+                        break;
                     default:
-                        logLevel("Invalid messaage passed to gfx-handle -> " + message, Level.WARNING);
+                        logLevel("Invalid message passed to gfx-handler -> " + message, Level.WARNING);
                 }
             }
         }
     }
 
 
+
     //END GRAPHICS OPERATIONS
 
     //Warp function
     private void genWarp(LogicEngine.Difficulties difficulty, final Context context) {
+
         if (GraphicsHandler.isGamespaceEmpty) {
             GraphicsHandler.isGamespaceEmpty = false;
             //Declare our warp;
@@ -243,33 +457,51 @@ public class GraphicsHandler {
             warp.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
-                    Log.e("WARP =>", "Warp tapped!");
-                    warp.getAnimation().cancel();
-                    warp.animate().alpha(0f).setDuration(10).start();
-                    warp.setAlpha(0);
+                    //Only works when game is not paused
+                    if (LogicEngine.State() != LogicEngine.Mode.PAUSING && LogicEngine.State() != LogicEngine.Mode.PAUSED) {
+                        Log.e("WARP =>", "Warp tapped!");
+
+                        //Disable onclick
+                        warp.setOnClickListener(new View.OnClickListener() {
+
+                            @Override
+                            public void onClick(View v) {
+                                //Do nothing
+                            }
+                        });
+
+                        //Fade it out fast
+                        warp.setAnimation(new AlphaAnimation(1, 0));
 
 
-                    gameArea.removeView(warp);
+                        animationQueue.remove((warp));
 
-                    animationQueue.remove((warp));
+                        //Initiate scoring, initiate warp pop()
+                        //This also spawns a new warp via a graphics handler req.
 
-                    //Initiate scoring, initiate warp pop()
-                    //This also spawns a new warp via a graphics handler req.
-
-                    //Score, if not just a missed warp.
-                    if (!warp.isMissed())
-                        LogicEngine.CalculateScore(warp.pop(), warp, position, context);
-                    else if (warp.isMissed() && warp.getType() == LogicEngine.Type.BLACKHOLE)
-                        LogicEngine.CalculateScore(warp.pop(), warp, position, context);
+                        //Score, if not just a missed warp.
+                        if (!warp.isMissed())
+                            LogicEngine.CalculateScore(warp.pop(), warp, position, context);
+                        else if (warp.isMissed() && warp.getType() == LogicEngine.Type.BLACKHOLE)
+                            LogicEngine.CalculateScore(warp.pop(), warp, position, context);
 
 
-                    Log.i("Graphic Handler =>", "Removed Warp!");
+                        Log.i("Graphic Handler =>", "Removed Warp!");
 
-                    isGamespaceEmpty = true; //Warp is popped
+                        //Remove the warp
+                        for (int i = 0; i < gameArea.getChildCount(); i++) {
+                            if (gameArea.getChildAt(i) instanceof Warp) {
+                                gameArea.removeViewAt(i);
+                            }
+                        }
 
-                    //Add warp to animation queue
+                        isGamespaceEmpty = true; //Warp is popped
 
+                        //Add warp to animation queue
 
+                    } else {
+                        logLevel("Game is paused, Cannot tap warp!", Level.WARNING);
+                    }
                 }
             });
 
@@ -282,7 +514,7 @@ public class GraphicsHandler {
                         @Override
                         public void run() {
                             //Rotation Animation
-                            warp.animate().rotationBy(360).setInterpolator(new CycleInterpolator(WARP_CYCLE_SPEED)).setDuration(60000).start();
+                            warp.animate().rotationBy(360).setInterpolator(new CycleInterpolator(WARP_CYCLE_SPEED)).setDuration(600000).start();
 
                             //Warp animation
                             DecelerateInterpolator inter = new DecelerateInterpolator();
@@ -385,6 +617,31 @@ public class GraphicsHandler {
         while (LogicEngine.State() == LogicEngine.Mode.BUSY) {
             //Wait for Logic to finish;
         }
+    }
+
+    private void end(Context context) {
+
+        final RelativeLayout gameArea = (RelativeLayout) ((Activity) context).findViewById(R.id.GAME__Area);
+
+        ((Activity) context).runOnUiThread(new Runnable() {
+            @Override
+            public void run() {
+                //Remove all warps
+                for (int x = 0; x < gameArea.getChildCount(); x++) {
+                    if (gameArea.getChildAt(x) instanceof Warp) {
+                        gameArea.removeView(gameArea.getChildAt(x));
+                        isGamespaceEmpty = true;
+                    }
+                }
+            }
+
+        });
+
+        //When the logic engine is finished run initial UI updates
+        updateTime(context);
+        updateScore(context);
+        animationQueue.clear();
+        state = LogicEngine.Mode.DONE;
     }
 
     //This is how outside entities add to the engine's workload
